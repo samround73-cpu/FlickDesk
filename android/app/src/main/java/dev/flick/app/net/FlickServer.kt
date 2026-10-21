@@ -1,13 +1,11 @@
 package dev.flick.app.net
 
-import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
-import android.os.Environment
-import android.provider.MediaStore
 import dev.flick.app.PairedPc
 import dev.flick.app.core.FlickCrypto
 import dev.flick.app.core.SecureChannel
+import dev.flick.app.core.Transfers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
@@ -22,7 +20,8 @@ import java.net.SocketException
 
 /**
  * Receives files and clipboard text from paired PCs on TCP 47802, over the encrypted channel.
- * Photos go to Pictures/Flick, videos to Movies/Flick, everything else to Download/Flick.
+ * Photos go to Pictures/Flick, videos to Movies/Flick, everything else to Download/Flick;
+ * folders are unpacked into Download/Flick/<name>. Big files resume after a dropped connection.
  */
 class FlickServer(
     private val context: Context,
@@ -33,14 +32,20 @@ class FlickServer(
         fun onPcSeen(pc: PairedPc, address: String)
         fun onFileStarting(pc: PairedPc, name: String, batchIndex: Int)
         fun onFileReceived(pc: PairedPc, uri: Uri, name: String, mime: String, size: Long, batchIndex: Int, batchCount: Int)
+        /** Bytes received so far of a big file (includes a resumed part). */
+        fun onFileProgress(pc: PairedPc, key: String, name: String, done: Long, total: Long) {}
+        /** The connection dropped mid-file; the partial copy is kept for a resume. */
+        fun onFileInterrupted(pc: PairedPc, key: String, name: String) {}
         fun onClip(pc: PairedPc, text: String)
         fun onError(message: String)
     }
 
     @Volatile private var serverSocket: ServerSocket? = null
+    private val active = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
     fun start(scope: CoroutineScope) {
         scope.launch(Dispatchers.IO) {
+            runCatching { Transfers.cleanupOldPartials(context) }
             val server = try {
                 ServerSocket().apply {
                     reuseAddress = true
@@ -109,7 +114,7 @@ class FlickServer(
 
     private fun receiveFile(ch: SecureChannel, h: org.json.JSONObject, pc: PairedPc) {
         val size = h.optLong("size", -1)
-        if (size < 0) {
+        if (size < 0 || size > MAX_FILE_BYTES) {
             ch.writeJson(Protocol.error("bad-size"))
             return
         }
@@ -117,38 +122,64 @@ class FlickServer(
         val mime = h.optString("mime").ifBlank { "application/octet-stream" }
         val batchIndex = h.optInt("batchIndex", 0).coerceAtLeast(0)
         val batchCount = h.optInt("batchCount", 1).coerceAtLeast(1)
+        val id = Transfers.cleanId(h.optString("id").ifBlank { null })
+        val folder = h.optString("folder").ifBlank { null }?.let { Protocol.safeFileName(it) }
+        val shownName = folder ?: name
 
-        ch.writeJson(Protocol.ok()) // ready
-        listener.onFileStarting(pc, name, batchIndex)
+        // Resume: a partial copy from an earlier, interrupted attempt of the same file.
+        val partial = Transfers.partialFile(context, pc.id, id, size)
+        if (!active.add(partial.name)) {
+            ch.writeJson(Protocol.error("busy"))
+            return
+        }
+        try {
+            if (partial.length() > size) partial.delete()
+            val offset = partial.length()
+            ch.writeJson(Protocol.ok().put("offset", offset)) // ready
+            if (offset == 0L) listener.onFileStarting(pc, shownName, batchIndex)
 
-        val uri = save(ch, name, mime, size)
-        ch.writeJson(Protocol.ok().put("savedAs", name))
-        listener.onFileReceived(pc, uri, name, mime, size, batchIndex, batchCount)
+            var received = false
+            try {
+                java.io.FileOutputStream(partial, true).use { out ->
+                    var last = 0L
+                    ch.receiveToStream(out, size - offset) { got ->
+                        val done = offset + got
+                        if (done - last >= 512 * 1024 || done == size) {
+                            last = done
+                            if (size >= Transfers.PROGRESS_THRESHOLD) listener.onFileProgress(pc, partial.name, shownName, done, size)
+                        }
+                    }
+                }
+                received = true
+
+                if (folder != null) {
+                    // Unpacking can take a while: confirm receipt first so the PC isn't left waiting.
+                    runCatching { ch.writeJson(Protocol.ok().put("savedAs", folder)) } // the files still get saved
+                    val unpacked = Transfers.unpackFolder(context, partial, folder, MAX_FILE_BYTES)
+                    partial.delete()
+                    val uri = unpacked.firstUri ?: throw IOException("The folder was empty")
+                    listener.onFileReceived(pc, uri, "${unpacked.folder} (${unpacked.files} files)", unpacked.firstMime ?: "application/octet-stream", size, batchIndex, batchCount)
+                } else {
+                    // Confirm first: copying a big video into the gallery can outlast the PC's wait.
+                    runCatching { ch.writeJson(Protocol.ok().put("savedAs", name)) } // the file still gets saved
+                    val uri = Transfers.publishFile(context, partial, name, mime)
+                    partial.delete()
+                    listener.onFileReceived(pc, uri, name, mime, size, batchIndex, batchCount)
+                }
+            } catch (e: Exception) {
+                // Interrupted downloads keep their partial copy so the PC can resume; anything
+                // that arrived but couldn't be saved (or has no id to resume by) is dropped.
+                if (received || id == null) partial.delete()
+                else if (size >= Transfers.PROGRESS_THRESHOLD) listener.onFileInterrupted(pc, partial.name, shownName)
+                runCatching { ch.writeJson(Protocol.error("save-failed")) }
+                throw e
+            }
+        } finally {
+            active.remove(partial.name)
+        }
     }
 
-    private fun save(ch: SecureChannel, name: String, mime: String, size: Long): Uri {
-        val resolver = context.contentResolver
-        val volume = MediaStore.VOLUME_EXTERNAL_PRIMARY
-        val (collection, folder) = when {
-            mime.startsWith("image/") -> MediaStore.Images.Media.getContentUri(volume) to Environment.DIRECTORY_PICTURES
-            mime.startsWith("video/") -> MediaStore.Video.Media.getContentUri(volume) to Environment.DIRECTORY_MOVIES
-            else -> MediaStore.Downloads.getContentUri(volume) to Environment.DIRECTORY_DOWNLOADS
-        }
-        val values = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-            put(MediaStore.MediaColumns.MIME_TYPE, mime)
-            put(MediaStore.MediaColumns.RELATIVE_PATH, "$folder/Flick")
-            put(MediaStore.MediaColumns.IS_PENDING, 1)
-        }
-        val uri = resolver.insert(collection, values) ?: throw IOException("Couldn't create $name")
-        try {
-            val out = resolver.openOutputStream(uri) ?: throw IOException("Couldn't write $name")
-            out.use { ch.receiveToStream(it, size) }
-            resolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
-            return uri
-        } catch (e: Exception) {
-            resolver.delete(uri, null, null)
-            throw e
-        }
+    companion object {
+        private const val MAX_FILE_BYTES = 50L * 1024 * 1024 * 1024
     }
 }

@@ -274,12 +274,28 @@ object FlickCore {
         items.forEach { item -> _sending.update { it + (item.key to 0f) } }
         for ((i, item) in items.withIndex()) {
             try {
-                client.sendFile(pc, app.contentResolver, app.cacheDir, item, edgePos, i, items.size) { p ->
+                val big = item.mime == Transfers.FOLDER_MIME || item.size >= Transfers.PROGRESS_THRESHOLD
+                val noteKey = "out:${item.key}"
+                var lastNote = -1
+                client.sendFile(
+                    pc, app.contentResolver, app.cacheDir, item, edgePos, i, items.size,
+                    onRetry = { attempt, of ->
+                        _events.tryEmit(CoreEvent.Message("Connection dropped – resuming ${item.name} ($attempt/$of)…"))
+                        if (big) Notifications.progress(app, noteKey, "Reconnecting to ${pc.name}…", item.name, -1f)
+                    },
+                ) { p ->
                     _sending.update { it + (item.key to p) }
+                    val pct = (p * 100).toInt()
+                    if (big && pct != lastNote) {
+                        lastNote = pct
+                        Notifications.progress(app, noteKey, "Sending ${item.name} to ${pc.name}", "$pct %", p)
+                    }
                 }
+                if (big) Notifications.endProgress(app, noteKey)
                 ok++
                 addHistory(HistoryItem(item.name, item.uri.toString(), item.mime, false, pc.name, item.size, System.currentTimeMillis()))
             } catch (e: Exception) {
+                Notifications.endProgress(app, "out:${item.key}")
                 _events.tryEmit(CoreEvent.Message("Couldn't send ${item.name}: ${friendly(e, "network error")}"))
                 if (e !is RemoteException) _pcStates.update { it + (pc.id to PcState.OFFLINE) }
                 // the rest of the stack would fail the same way
@@ -350,6 +366,30 @@ object FlickCore {
             addHistory(HistoryItem(name, uri.toString(), mime, true, pc.name, size, System.currentTimeMillis()))
             _events.tryEmit(CoreEvent.Arrived(file))
             if (!inForeground && batchIndex == batchCount - 1) Notifications.arrival(app, file, batchCount)
+        }
+
+        private val lastPct = java.util.concurrent.ConcurrentHashMap<String, Int>()
+
+        override fun onFileProgress(pc: PairedPc, key: String, name: String, done: Long, total: Long) {
+            if (done >= total) {
+                lastPct.remove(key)
+                Notifications.endProgress(app, key)
+                return
+            }
+            val pct = (done * 100 / total).toInt()
+            if (lastPct.put(key, pct) == pct) return
+            Notifications.progress(app, key, "Receiving $name from ${pc.name}", "$pct % · ${sizeText(done)} of ${sizeText(total)}", done.toFloat() / total)
+        }
+
+        override fun onFileInterrupted(pc: PairedPc, key: String, name: String) {
+            lastPct.remove(key)
+            Notifications.endProgress(app, key, "Paused: $name", "It carries on when ${pc.name} reconnects")
+        }
+
+        private fun sizeText(bytes: Long): String = when {
+            bytes >= 1L shl 30 -> "%.1f GB".format(bytes / (1L shl 30).toDouble())
+            bytes >= 1L shl 20 -> "%.0f MB".format(bytes / (1L shl 20).toDouble())
+            else -> "${bytes / 1024} KB"
         }
 
         override fun onClip(pc: PairedPc, text: String) {

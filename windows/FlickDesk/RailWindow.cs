@@ -397,6 +397,16 @@ internal sealed class RailWindow : Window
         FilesDropped?.Invoke(paths, hot.Device, screenPoint);
     }
 
+    /// <summary>Live status while a big transfer runs ("Sending… 42 %"); keeps the card from timing out.</summary>
+    public void ShowProgress(TrustedDevice device, string text)
+    {
+        if (!_busy || _hot is null || _hot.Device.DeviceId != device.DeviceId) return;
+        _cardStatus.Text = text;
+        _cardStatus.Foreground = Ui.Muted;
+        _safety.Stop();
+        _safety.Start();
+    }
+
     /// <summary>Called by the app when the transfer finishes.</summary>
     public void ShowResult(TrustedDevice device, bool ok, string? message = null)
     {

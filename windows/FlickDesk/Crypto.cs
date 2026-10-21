@@ -142,7 +142,7 @@ internal sealed class SecureChannel : IDisposable
                ?? throw new InvalidDataException("Message is not a JSON object.");
     }
 
-    public async Task SendStreamAsync(Stream source, long size, CancellationToken ct)
+    public async Task SendStreamAsync(Stream source, long size, CancellationToken ct, Action<long>? progress = null)
     {
         var buffer = new byte[ChunkSize];
         long remaining = size;
@@ -158,11 +158,12 @@ internal sealed class SecureChannel : IDisposable
             }
             await WriteFrameAsync(buffer.AsMemory(0, got), ct).ConfigureAwait(false);
             remaining -= got;
+            progress?.Invoke(size - remaining);
         }
         await _stream.FlushAsync(ct).ConfigureAwait(false);
     }
 
-    public async Task ReceiveToStreamAsync(Stream destination, long size, CancellationToken ct)
+    public async Task ReceiveToStreamAsync(Stream destination, long size, CancellationToken ct, Action<long>? progress = null)
     {
         long remaining = size;
         while (remaining > 0)
@@ -171,6 +172,7 @@ internal sealed class SecureChannel : IDisposable
             if (chunk.Length == 0 || chunk.Length > remaining) throw new InvalidDataException("Unexpected chunk size.");
             await destination.WriteAsync(chunk, ct).ConfigureAwait(false);
             remaining -= chunk.Length;
+            progress?.Invoke(size - remaining);
         }
     }
 

@@ -75,16 +75,26 @@ The angle of your flick sets where along the PC's edge the light appears.
 Files land on your **Desktop**, and a notification lets you open them.
 
 To send several at once, tap photos to select them, then long-press any of them and flick once. They all go.
+**Folders:** in the **Files** tab, tap **Send a folder**, pick one, then flick it. It arrives on the PC as a normal folder.
 
 <p align="center"><img src="docs/images/phone-to-pc.png" alt="Flicking a photo from the phone to the PC" width="90%"></p>
 
 ### PC → phone
-Drag files to the edge of the screen your phone sits on. A send card slides in for your phone.
+Drag files or folders to the edge of the screen your phone sits on. A send card slides in for your phone.
 Let go and they're sent. If you've paired more than one phone, they're listed under the card;
 hover one to send to it instead.
 
 You can also send from the tray icon (**Send files to phone…**).
 On the phone, photos land in **Pictures/Flick**, videos in **Movies/Flick** and everything else in **Download/Flick**.
+Folders are unpacked into **Download/Flick/*folder name***.
+
+### Big files and folders
+- Anything over 16 MB shows its progress, with speed and time left.
+  On the PC it's a small panel above the clock; on the phone it's a notification.
+- **If the Wi-Fi drops, it carries on where it stopped** instead of starting again.
+  The sender reconnects by itself (up to 4 tries over about 20 seconds).
+  If that fails, sending the same file again later still resumes, as long as it's within 3 days.
+- Folders are packed into a single bundle on the way and unpacked on arrival, with all their subfolders.
 
 <p align="center"><img src="docs/images/pc-to-phone.png" alt="Dragging a photo to the screen edge to send it to the phone" width="90%"></p>
 
@@ -113,6 +123,7 @@ On the phone, photos land in **Pictures/Flick**, videos in **Movies/Flick** and 
 | The phone never finds the PC | Use the same Wi-Fi on both (not a guest network, since those often block devices from talking to each other). Check Windows Firewall allows FlickDesk on **Private** networks. Make sure your Wi-Fi is set as a **Private** network in Windows, not Public. You can also pair by typing the PC's IP address. |
 | The exe does nothing when opened | It may already be running, so check the tray. If it hit an error, a message box tells you, and the details are in `%LOCALAPPDATA%\FlickDesk\crash.log`. Please attach that file to an [issue](https://github.com/samround73-cpu/FlickDesk/issues). |
 | "App not installed" when updating the APK | Each release is currently signed with a different debug key, so Android won't install it over an older version. Uninstall Flick first, then install the new APK, then pair again. |
+| A big transfer stopped | It resumes by itself if the connection comes back within ~20 s. Otherwise send the same file again and it continues from where it stopped (partial copies are kept for 3 days). |
 | The same phone appears twice | It was paired again after a reinstall. Remove the older entry from the tray → **Remove a phone**. From 0.3.3 onwards, re-pairing replaces the old entry automatically. |
 | No light effect on the PC | Turn on **Settings → General → Full-screen light (GPU)**, or turn it off if it causes problems. FlickDesk falls back to a simpler renderer if needed. |
 
@@ -196,18 +207,24 @@ Messages inside the channel are JSON frames:
 - `hello {deviceName, port}`
 - `clip {text}`
 - `unpair`
-- `file {name, size, mime, edgePos, batchIndex, batchCount}`: the receiver replies `{"ok":true}` (ready), then the data frames follow, then `{"ok":true,"savedAs"}`.
+- `file {name, size, mime, edgePos, batchIndex, batchCount, id, folder?}`: the receiver replies `{"ok":true,"offset":N}` (ready),
+  then the sender sends the data from byte N onward, then the receiver replies `{"ok":true,"savedAs"}`.
+  - `id` is a stable transfer id. The receiver keeps a partial copy keyed by sender, `id` and size, and `offset` is how much of it it already has, so an interrupted transfer resumes.
+  - `folder` means the payload is a zip of that folder, which the receiver unpacks.
+  - Older apps that ignore these fields still work; they just start from 0.
 </details>
 
 ---
 
 ## Known limits
 - The light effect and the drop card use the **primary monitor**.
-- **Folders** can't be sent. Zip them first.
+- Pausing and resuming happen automatically. There's no manual pause button yet.
+- Phone → PC folders need Android's folder picker. Some cloud-only folders (e.g. Google Drive) can't be picked there.
 - The APK is debug-signed, so updates need an uninstall first (see Troubleshooting).
 - The Windows exe isn't code-signed, so SmartScreen warns on first run.
 
 ## Changelog
+- **0.4.0:** send **folders** both ways; **big files resume** after a dropped connection; progress with speed and time left on both sides.
 - **0.3.5:** new app icon (Android adaptive and themed icon, Windows exe and tray). Download links that never change.
 - **0.3.4:** new *Halo Card* drop panel on Windows; quiet 8-bit arrival sound.
 - **0.3.3:** remove phones from the tray menu; re-pairing no longer duplicates a phone.

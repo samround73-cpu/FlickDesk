@@ -1,5 +1,7 @@
 package dev.flick.app
 
+import dev.flick.app.core.Transfers
+import android.content.Intent
 import android.app.Application
 import android.content.ContentResolver
 import android.content.ContentUris
@@ -121,6 +123,20 @@ class FlickViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val items = withContext(Dispatchers.IO) { uris.mapNotNull(::describe) }
             _files.update { list -> (items + list).distinctBy { it.key } }
+            _tab.value = Tab.FILES
+        }
+    }
+
+    /** A picked folder: sent as one zip and unpacked on the PC. */
+    fun addFolder(tree: Uri) {
+        viewModelScope.launch {
+            val item = withContext(Dispatchers.IO) {
+                runCatching {
+                    resolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                SendItem(tree, Transfers.folderName(resolver, tree), Transfers.FOLDER_MIME, -1)
+            }
+            _files.update { list -> (listOf(item) + list).distinctBy { it.key } }
             _tab.value = Tab.FILES
         }
     }

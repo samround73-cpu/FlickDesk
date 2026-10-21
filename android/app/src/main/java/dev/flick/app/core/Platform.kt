@@ -25,6 +25,7 @@ import dev.flick.app.ReceivedFile
 object Notifications {
     private const val ARRIVALS = "arrivals"
     private const val SERVICE = "receiver"
+    private const val TRANSFERS = "transfers"
     const val SERVICE_ID = 1
     private var nextId = 100
 
@@ -32,6 +33,10 @@ object Notifications {
         val nm = context.getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel(ARRIVALS, "Files from your PC", NotificationManager.IMPORTANCE_DEFAULT).apply {
             description = "When a file or text arrives while Flick is in the background"
+        })
+        nm.createNotificationChannel(NotificationChannel(TRANSFERS, "Big transfers", NotificationManager.IMPORTANCE_LOW).apply {
+            description = "Progress while a large file or folder is on its way"
+            setShowBadge(false)
         })
         nm.createNotificationChannel(NotificationChannel(SERVICE, "Ready to receive", NotificationManager.IMPORTANCE_MIN).apply {
             description = "Keeps Flick listening for your PC. You can hide this channel."
@@ -63,6 +68,44 @@ object Notifications {
             .setContentIntent(tap)
             .build())
     }
+
+    /** An ongoing progress notification for a big transfer; [fraction] < 0 = indeterminate. */
+    fun progress(context: Context, key: String, title: String, text: String, fraction: Float) {
+        val n = NotificationCompat.Builder(context, TRANSFERS)
+            .setSmallIcon(R.drawable.ic_stat_flick)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setProgress(1000, (fraction.coerceIn(0f, 1f) * 1000).toInt(), fraction < 0)
+            .setContentIntent(openApp(context, null, null))
+            .build()
+        try {
+            NotificationManagerCompat.from(context).notify(key, PROGRESS_ID, n)
+        } catch (_: SecurityException) { }
+    }
+
+    /** Replaces a progress notification with a final line ("Paused – …"), or removes it. */
+    fun endProgress(context: Context, key: String, title: String? = null, text: String? = null) {
+        val nm = NotificationManagerCompat.from(context)
+        if (title == null) {
+            nm.cancel(key, PROGRESS_ID)
+            return
+        }
+        try {
+            nm.notify(key, PROGRESS_ID, NotificationCompat.Builder(context, TRANSFERS)
+                .setSmallIcon(R.drawable.ic_stat_flick)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setAutoCancel(true)
+                .setSilent(true)
+                .setContentIntent(openApp(context, null, null))
+                .build())
+        } catch (_: SecurityException) { }
+    }
+
+    private const val PROGRESS_ID = 7
 
     fun clip(context: Context, pcName: String, text: String, copied: Boolean) {
         post(context, NotificationCompat.Builder(context, ARRIVALS)

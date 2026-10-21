@@ -125,6 +125,9 @@ fun FlickApp(vm: FlickViewModel) {
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) vm.addFiles(uris)
     }
+    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) vm.addFolder(uri)
+    }
     LaunchedEffect(Unit) {
         val granted = permissions.any { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
         if (granted) vm.loadMedia() else askMedia.launch(permissions)
@@ -189,6 +192,7 @@ fun FlickApp(vm: FlickViewModel) {
                     setTab = vm::setTab,
                     askMediaPermission = { askMedia.launch(permissions) },
                     pickFiles = { pickFiles.launch(arrayOf("*/*")) },
+                    pickFolder = { pickFolder.launch(null) },
                     removeFile = vm::removeFile,
                     toggleSelect = vm::toggleSelect,
                     clearSelection = vm::clearSelection,

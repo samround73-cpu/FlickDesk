@@ -64,6 +64,7 @@ object Protocol {
         "bad-code" -> "That QR code didn't match – try scanning again"
         "bad-size" -> "File too large"
         "save-failed" -> "The PC couldn't save the file"
+        "busy" -> "The PC is still finishing the last attempt"
         null, "" -> "Something went wrong"
         else -> code
     }

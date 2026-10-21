@@ -16,7 +16,7 @@
     <StartupObject>FlickDesk.Program</StartupObject>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>FlickDesk.ico</ApplicationIcon>
-    <Version>0.3.5</Version>
+    <Version>0.4.0</Version>
     <!-- Lets the project also build from macOS/Linux CI. -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <!-- Single-file publish: WPF's native DLLs (wpfgfx, PresentationNative, D3DCompiler...) must be

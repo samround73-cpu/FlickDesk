@@ -11,7 +11,11 @@ namespace FlickDesk;
 
 internal sealed record IncomingFile(
     Guid Id, string DeviceName, string FileName, long Size, string Mime, double EdgePos,
-    int BatchIndex, int BatchCount);
+    int BatchIndex, int BatchCount, string? FolderName = null, long ResumedFrom = 0)
+{
+    public bool IsFolder => FolderName is not null;
+    public string DisplayName => FolderName ?? FileName;
+}
 
 /// <summary>Accepts pairing and encrypted requests from phones on TCP 47801.</summary>
 internal sealed class TransferServer : IDisposable
@@ -28,6 +32,8 @@ internal sealed class TransferServer : IDisposable
     public event Action<IncomingFile>? FileStarting;
     public event Action<IncomingFile, string>? FileSaved;
     public event Action<IncomingFile, string>? FileFailed;
+    /// <summary>Args: file, bytes received so far (including any resumed part).</summary>
+    public event Action<IncomingFile, long>? FileProgress;
     /// <summary>Args: phone name, text.</summary>
     public event Action<string, string>? ClipReceived;
     /// <summary>A phone checked in (hello) – used to refresh "online" state in the UI.</summary>
@@ -41,6 +47,7 @@ internal sealed class TransferServer : IDisposable
 
     public void Start()
     {
+        Transfers.CleanupOldPartials();
         _listener.Start();
         _ = Task.Run(() => AcceptLoopAsync(_cts.Token));
     }
@@ -191,43 +198,86 @@ internal sealed class TransferServer : IDisposable
         double pos = Math.Clamp((double?)h["edgePos"] ?? 0.5, 0, 1);
         int batchIndex = Math.Max(0, (int?)h["batchIndex"] ?? 0);
         int batchCount = Math.Max(1, (int?)h["batchCount"] ?? 1);
-        var info = new IncomingFile(Guid.NewGuid(), device.Name, name, size, mime, pos, batchIndex, batchCount);
+        var id = Transfers.CleanId((string?)h["id"]);
+        var folderName = (string?)h["folder"] is { Length: > 0 } f ? Protocol.SafeFileName(f) : null;
 
-        // Tell the phone we're ready, then start the glow while the bytes stream in.
-        await ch.WriteJsonAsync(Protocol.Ok(), ct);
-        FileStarting?.Invoke(info);
-
-        var tempDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FlickDesk", "incoming");
-        Directory.CreateDirectory(tempDir);
-        var temp = Path.Combine(tempDir, Guid.NewGuid().ToString("N") + ".part");
-
+        // Resume: a partial copy from an earlier, interrupted attempt of the same file.
+        var partial = Transfers.PartialPath(device.DeviceId, id, size);
+        FileStream fs;
         try
         {
-            await using (var fs = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, useAsync: true))
+            fs = new FileStream(partial, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, 81920, useAsync: true);
+        }
+        catch (IOException)
+        {
+            // Still being written by a connection that hasn't noticed it dropped yet.
+            await ch.WriteJsonAsync(Protocol.Error("busy"), ct);
+            return;
+        }
+
+        long offset = fs.Length <= size ? fs.Length : 0;
+        fs.SetLength(offset);
+        fs.Seek(offset, SeekOrigin.Begin);
+
+        var info = new IncomingFile(Guid.NewGuid(), device.Name, name, size, mime, pos, batchIndex, batchCount, folderName, offset);
+
+        bool received = false;
+        try
+        {
+            await using (fs)
             {
-                await ch.ReceiveToStreamAsync(fs, size, ct);
+                // Tell the phone we're ready (and how much we already have), then start the glow.
+                var ready = Protocol.Ok();
+                ready["offset"] = offset;
+                await ch.WriteJsonAsync(ready, ct);
+                if (offset == 0) FileStarting?.Invoke(info);
+
+                long lastReport = 0;
+                await ch.ReceiveToStreamAsync(fs, size - offset, ct, got =>
+                {
+                    long total = offset + got;
+                    if (total - lastReport >= 512 * 1024 || total == size)
+                    {
+                        lastReport = total;
+                        FileProgress?.Invoke(info, total);
+                    }
+                });
             }
+            received = true;
 
             var folder = _settings.SaveFolder;
             Directory.CreateDirectory(folder);
             string final;
+            if (folderName is not null)
+            {
+                // Unpacking a big folder can take a while: confirm receipt first so the phone isn't left waiting.
+                var got = Protocol.Ok();
+                got["savedAs"] = folderName;
+                try { await ch.WriteJsonAsync(got, ct); } catch (IOException) { /* the files still get saved */ }
+                final = Transfers.ExtractFolder(partial, folder, folderName, MaxFileBytes);
+                File.Delete(partial);
+                _settings.Touch(device.DeviceId, null, remote.ToString(), device.Port);
+                FileSaved?.Invoke(info, final);
+                return;
+            }
+            // Confirm first: moving a big file to another drive can outlast the phone's wait.
+            var ok = Protocol.Ok();
+            ok["savedAs"] = name;
+            try { await ch.WriteJsonAsync(ok, ct); } catch (IOException) { /* the file still gets saved */ }
             lock (_gate)
             {
                 final = Protocol.UniquePath(folder, name);
-                File.Move(temp, final);
+                File.Move(partial, final);
             }
-
             _settings.Touch(device.DeviceId, null, remote.ToString(), device.Port);
-            var ok = Protocol.Ok();
-            ok["savedAs"] = Path.GetFileName(final);
-            await ch.WriteJsonAsync(ok, ct);
             FileSaved?.Invoke(info, final);
         }
         catch (Exception ex)
         {
-            try { File.Delete(temp); } catch { /* best effort */ }
-            FileFailed?.Invoke(info, ex.Message);
+            // An interrupted download keeps its partial copy so the phone can resume it;
+            // a file that arrived but couldn't be saved/unpacked is dropped.
+            if (received || id is null) { try { File.Delete(partial); } catch { /* best effort */ } }
+            FileFailed?.Invoke(info, received ? ex.Message : "connection lost – it will resume if the phone retries");
             try { await ch.WriteJsonAsync(Protocol.Error("save-failed"), ct); } catch { }
         }
     }

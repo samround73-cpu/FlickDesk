@@ -5,6 +5,7 @@ import dev.flick.app.PairedPc
 import dev.flick.app.SendItem
 import dev.flick.app.core.FlickCrypto
 import dev.flick.app.core.SecureChannel
+import dev.flick.app.core.Transfers
 import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
@@ -26,6 +27,10 @@ class PairHandshake(
 
 /** Phone → PC requests. Everything blocks: call from Dispatchers.IO. */
 class FlickClient(private val deviceId: String, private val deviceName: String) {
+    private companion object {
+        /** Waits before each retry of an interrupted transfer. */
+        val RETRY_DELAYS_MS = longArrayOf(1_500, 3_000, 6_000, 10_000)
+    }
 
     // ------------------------------------------------------------------ pairing
 
@@ -116,8 +121,11 @@ class FlickClient(private val deviceId: String, private val deviceName: String) 
     }
 
     /**
-     * Streams one file. [edgePos] (0..1) tells the PC where along its edge to start the light,
-     * derived from the angle of the flick. [batchIndex]/[batchCount] mark a stack.
+     * Streams one file – or a picked folder, zipped on the way and unpacked on the PC.
+     * [edgePos] (0..1) tells the PC where along its edge to start the light, derived from the
+     * angle of the flick. [batchIndex]/[batchCount] mark a stack. If the connection drops after
+     * the PC accepted the file, it reconnects and resumes from the PC's copy (up to 4 times);
+     * [onRetry] is told before each attempt.
      */
     fun sendFile(
         pc: PairedPc,
@@ -127,34 +135,62 @@ class FlickClient(private val deviceId: String, private val deviceName: String) 
         edgePos: Float,
         batchIndex: Int,
         batchCount: Int,
+        onRetry: (attempt: Int, of: Int) -> Unit = { _, _ -> },
         onProgress: (Float) -> Unit,
     ) {
-        // Some content providers don't report a size; the protocol needs one up front.
-        val tempCopy: File? = if (item.size < 0) copyToCache(resolver, cacheDir, item) else null
+        val isFolder = item.mime == Transfers.FOLDER_MIME
+        // A folder is zipped first; some content providers don't report a size, which the protocol needs up front.
+        val tempCopy: File? = when {
+            isFolder -> Transfers.zipFolder(resolver, item.uri, cacheDir).first
+            item.size < 0 -> copyToCache(resolver, cacheDir, item)
+            else -> null
+        }
         try {
             val size = tempCopy?.length() ?: item.size
-            withPc(pc) { ch ->
-                ch.writeJson(
-                    JSONObject()
-                        .put("type", "file")
-                        .put("name", item.name)
-                        .put("size", size)
-                        .put("mime", item.mime)
-                        .put("edgePos", edgePos.toDouble())
-                        .put("batchIndex", batchIndex)
-                        .put("batchCount", batchCount),
-                )
-                val ready = ch.readJson()
-                if (!ready.optBoolean("ok")) throw RemoteException(ready.optString("error"))
+            val id = if (tempCopy == null) Transfers.stableId(item.uri, size) else Transfers.newId()
+            var started = false
+            var attempt = 0
+            while (true) {
+                try {
+                    withPc(pc) { ch ->
+                        val header = JSONObject()
+                            .put("type", "file")
+                            .put("name", if (isFolder) "${item.name}.zip" else item.name)
+                            .put("size", size)
+                            .put("mime", if (isFolder) "application/zip" else item.mime)
+                            .put("edgePos", edgePos.toDouble())
+                            .put("batchIndex", batchIndex)
+                            .put("batchCount", batchCount)
+                            .put("id", id)
+                        if (isFolder) header.put("folder", item.name)
+                        ch.writeJson(header)
+                        val ready = ch.readJson()
+                        if (!ready.optBoolean("ok")) throw RemoteException(ready.optString("error"))
+                        val offset = ready.optLong("offset", 0).coerceIn(0, size)
+                        started = true
 
-                val input = tempCopy?.inputStream()
-                    ?: resolver.openInputStream(item.uri)
-                    ?: throw IOException("Can't open ${item.name}")
-                input.use { src ->
-                    ch.sendStream(src, size) { sent -> onProgress(if (size == 0L) 1f else sent.toFloat() / size) }
+                        val input = tempCopy?.inputStream()
+                            ?: resolver.openInputStream(item.uri)
+                            ?: throw IOException("Can't open ${item.name}")
+                        input.use { src ->
+                            Transfers.skipFully(src, offset)
+                            onProgress(if (size == 0L) 1f else offset.toFloat() / size)
+                            ch.sendStream(src, size - offset) { sent ->
+                                onProgress(if (size == 0L) 1f else (offset + sent).toFloat() / size)
+                            }
+                        }
+                        val reply = ch.readJson()
+                        if (!reply.optBoolean("ok")) throw RemoteException(reply.optString("error"))
+                    }
+                    return
+                } catch (e: Exception) {
+                    val busy = e is RemoteException && e.code == "busy"
+                    val dropped = started && e !is RemoteException
+                    if ((!busy && !dropped) || attempt >= RETRY_DELAYS_MS.size) throw e
+                    onRetry(attempt + 1, RETRY_DELAYS_MS.size)
+                    Thread.sleep(RETRY_DELAYS_MS[attempt])
+                    attempt++
                 }
-                val reply = ch.readJson()
-                if (!reply.optBoolean("ok")) throw RemoteException(reply.optString("error"))
             }
         } finally {
             tempCopy?.delete()

@@ -66,7 +66,8 @@ internal sealed class App : Application
         _server = new TransferServer(_settings, _pairing);
         _server.FileStarting += f => Dispatcher.InvokeAsync(() => OnFileStarting(f));
         _server.FileSaved += (f, path) => Dispatcher.InvokeAsync(() => OnFileSaved(f, path));
-        _server.FileFailed += (f, err) => Dispatcher.InvokeAsync(() => Balloon("Transfer failed", $"{f.FileName}: {err}", WF.ToolTipIcon.Warning));
+        _server.FileFailed += (f, err) => Dispatcher.InvokeAsync(() => OnFileFailed(f, err));
+        _server.FileProgress += (f, done) => Dispatcher.InvokeAsync(() => OnFileProgress(f, done));
         _server.ClipReceived += (device, text) => Dispatcher.InvokeAsync(() => OnClipReceived(device, text));
         _server.DevicesChanged += () => Dispatcher.InvokeAsync(() => { _settingsWindow?.RefreshDevices(); _flyout?.RefreshIfOpen(); });
         try
@@ -225,16 +226,45 @@ internal sealed class App : Application
         if (_settings.Sound) Chime.Play();
     }
 
+    // Big transfers get a progress panel, keyed so a resumed attempt picks up the same panel.
+    private readonly Dictionary<string, ProgressToast> _toasts = new();
+    private static string ToastKey(IncomingFile f) => $"in|{f.DeviceName}|{f.DisplayName}|{f.Size}";
+
+    private void OnFileProgress(IncomingFile f, long done)
+    {
+        if (f.Size < Transfers.ProgressThreshold) return;
+        var key = ToastKey(f);
+        if (!_toasts.TryGetValue(key, out var toast))
+        {
+            toast = ProgressToast.Show($"Receiving {f.DisplayName}");
+            toast.Closed += (_, _) => _toasts.Remove(key);
+            _toasts[key] = toast;
+        }
+        toast.Report(done, f.Size, f.ResumedFrom > 0 ? $"From {f.DeviceName} (resumed) · " : $"From {f.DeviceName} · ");
+    }
+
+    private void OnFileFailed(IncomingFile f, string error)
+    {
+        if (_toasts.TryGetValue(ToastKey(f), out var toast))
+        {
+            toast.Finish($"Paused – it carries on when {f.DeviceName} reconnects", ok: false, seconds: 10);
+            return;
+        }
+        Balloon("Transfer failed", $"{f.DisplayName}: {error}", WF.ToolTipIcon.Warning);
+    }
+
     private async void OnFileSaved(IncomingFile f, string path)
     {
         var folder = FolderLabel(Path.GetDirectoryName(path));
+        if (_toasts.TryGetValue(ToastKey(f), out var done))
+            done.Finish(f.IsFolder ? $"Folder saved to {folder}" : $"Saved to {folder}", ok: true);
         _history.Add(new HistoryEntry { Name = Path.GetFileName(path), Path = path, Incoming = true, Device = f.DeviceName, Size = f.Size });
         _flyout?.RefreshIfOpen();
 
         bool quiet = QuietNow;
         if (!quiet && _settings.ShowCard)
         {
-            var thumb = await Thumbnails.LoadAsync(path);
+            var thumb = f.IsFolder ? null : await Thumbnails.LoadAsync(path);
             Overlay.DropCard(_settings.PhoneEdge, f.EdgePos, path, thumb, $"Saved to {folder}", Fx, Math.Min(f.BatchIndex, 6));
         }
 
@@ -305,15 +335,16 @@ internal sealed class App : Application
         var phone = TargetPhone(target);
         if (phone is null) return;
 
-        var files = paths.Where(File.Exists).ToList();
+        // Files and folders (folders are zipped on the fly and unpacked on the phone).
+        var files = paths.Where(p => File.Exists(p) || Directory.Exists(p)).ToList();
         if (files.Count == 0)
         {
-            Balloon("Nothing to send", "Folders aren't supported yet – drop files instead.");
-            if (fromRail) _rail?.ShowResult(phone, false, "Folders aren't supported yet");
+            Balloon("Nothing to send", "That item couldn't be found.");
+            if (fromRail) _rail?.ShowResult(phone, false, "Nothing to send");
             return;
         }
 
-        var thumb = await Thumbnails.LoadAsync(files[0]);
+        var thumb = File.Exists(files[0]) ? await Thumbnails.LoadAsync(files[0]) : null;
         var edge = _settings.PhoneEdge;
         double sendPos = dropPoint is { } dp
             ? (edge == Edge.Bottom ? dp.X / SystemParameters.PrimaryScreenWidth : dp.Y / SystemParameters.PrimaryScreenHeight)
@@ -330,14 +361,46 @@ internal sealed class App : Application
             var list = new List<(string file, string? error)>();
             for (int i = 0; i < files.Count; i++)
             {
-                var error = await PhoneClient.SendFileAsync(settings, phone, files[i], i, files.Count).ConfigureAwait(false);
-                list.Add((files[i], error));
+                var file = files[i];
+                int index = i; // the loop variable is shared by every closure below
+                bool isDir = Directory.Exists(file);
+                var label = Path.GetFileName(file.TrimEnd('\\', '/'));
+                ProgressToast? toast = null;
+                var error = await PhoneClient.SendFileAsync(settings, phone, file, index, files.Count, (done, total, note) =>
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        var count = files.Count > 1 ? $" ({index + 1} of {files.Count})" : "";
+                        bool big = isDir || total >= Transfers.ProgressThreshold;
+                        if (note is not null)
+                        {
+                            _rail?.ShowProgress(phone, note);
+                            if (big)
+                            {
+                                toast ??= ProgressToast.Show($"Sending {label} to {phone.Name}");
+                                toast.Report(Math.Max(0, done), total, note + " · ");
+                            }
+                            return;
+                        }
+                        if (!big) return;
+                        int pct = total > 0 ? (int)(done * 100 / total) : 0;
+                        _rail?.ShowProgress(phone, $"Sending{count}… {pct} %");
+                        toast ??= ProgressToast.Show($"Sending {label} to {phone.Name}");
+                        toast.Report(done, total, count.Length > 0 ? $"File{count} · " : "");
+                    })).ConfigureAwait(false);
+                // Queued after any pending progress updates, so the panel (if one was shown) exists by now.
+                await Dispatcher.InvokeAsync(() =>
+                    toast?.Finish(error is null ? "Sent ✓" : error, error is null, error is null ? 2 : 6));
+                list.Add((file, error));
             }
             return list;
         });
 
         foreach (var (file, error) in results.Where(r => r.error is null))
-            _history.Add(new HistoryEntry { Name = Path.GetFileName(file), Path = file, Incoming = false, Device = phone.Name, Size = new FileInfo(file).Length });
+            _history.Add(new HistoryEntry
+            {
+                Name = Path.GetFileName(file.TrimEnd('\\', '/')), Path = file, Incoming = false, Device = phone.Name,
+                Size = File.Exists(file) ? new FileInfo(file).Length : Transfers.DirectorySize(file),
+            });
 
         var failures = results.Where(r => r.error is not null).Select(r => $"{Path.GetFileName(r.file)}: {r.error}").ToList();
         if (failures.Count > 0)

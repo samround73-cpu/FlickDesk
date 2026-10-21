@@ -106,6 +106,7 @@ class HomeActions(
     val setTab: (Tab) -> Unit,
     val askMediaPermission: () -> Unit,
     val pickFiles: () -> Unit,
+    val pickFolder: () -> Unit,
     val removeFile: (SendItem) -> Unit,
     val toggleSelect: (SendItem) -> Unit,
     val clearSelection: () -> Unit,
@@ -314,9 +315,16 @@ private fun FilesTab(s: HomeState, a: HomeActions, drag: FlickDragState) {
                 colors = ButtonDefaults.buttonColors(containerColor = FlickBlue, contentColor = Color(0xFF06121F)),
                 shape = RoundedCornerShape(12.dp),
             ) { Text("Pick files", fontWeight = FontWeight.SemiBold) }
-            Spacer(Modifier.width(12.dp))
-            Text("…or Share → Flick from any app", color = Muted, fontSize = 12.5.sp)
+            Spacer(Modifier.width(8.dp))
+            OutlinedButton(
+                onClick = a.pickFolder,
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, Color(0xFF2A2E37)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+            ) { Text("Send a folder", fontWeight = FontWeight.SemiBold) }
         }
+        Spacer(Modifier.height(6.dp))
+        Text("…or Share → Flick from any app. Big files resume if the Wi-Fi drops.", color = Muted, fontSize = 12.5.sp)
         Spacer(Modifier.height(12.dp))
         if (s.files.isEmpty()) {
             Text("Files you pick or share land here, ready to flick.", color = Faint, fontSize = 13.sp)

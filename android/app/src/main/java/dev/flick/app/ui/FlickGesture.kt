@@ -1,5 +1,6 @@
 package dev.flick.app.ui
 
+import dev.flick.app.core.Transfers
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -307,7 +308,11 @@ fun TileContent(item: SendItem, bitmap: ImageBitmap?) {
         } else {
             val ext = item.name.substringAfterLast('.', "").take(5).uppercase()
             Text(
-                text = if (ext.isNotEmpty()) ".$ext" else "FILE",
+                text = when {
+                    item.mime == Transfers.FOLDER_MIME -> "FOLDER"
+                    ext.isNotEmpty() -> ".$ext"
+                    else -> "FILE"
+                },
                 color = FlickBlue,
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,

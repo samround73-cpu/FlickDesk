@@ -153,13 +153,14 @@ class SecureChannel(
         out.flush()
     }
 
-    fun receiveToStream(destination: OutputStream, size: Long) {
+    fun receiveToStream(destination: OutputStream, size: Long, onProgress: (Long) -> Unit = {}) {
         var remaining = size
         while (remaining > 0) {
             val chunk = readFrame()
             if (chunk.isEmpty() || chunk.size > remaining) throw IOException("Unexpected chunk size")
             destination.write(chunk)
             remaining -= chunk.size
+            onProgress(size - remaining)
         }
     }
 
