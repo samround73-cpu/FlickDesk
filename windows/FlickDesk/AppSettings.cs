@@ -134,7 +134,10 @@ internal sealed class AppSettings
     {
         lock (_gate)
         {
-            TrustedDevices.RemoveAll(d => d.DeviceId == device.DeviceId);
+            // Same id, or the same phone paired again after a reinstall (new id, same name):
+            // replace the old entry so the drop panel doesn't list the phone twice.
+            TrustedDevices.RemoveAll(d => d.DeviceId == device.DeviceId
+                || string.Equals(d.Name, device.Name, StringComparison.OrdinalIgnoreCase));
             TrustedDevices.Add(device);
         }
         Save();

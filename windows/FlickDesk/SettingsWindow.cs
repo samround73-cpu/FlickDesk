@@ -31,8 +31,9 @@ internal sealed class SettingsWindow : Window
         (EffectPreset.Quiet, "Quiet", "A soft glow at the edge"),
     };
 
-    public SettingsWindow(AppSettings settings, Action changed, Action preview, Action openPairing)
+    public SettingsWindow(AppSettings settings, Action changed, Action preview, Action openPairing, string startPage = "Effects")
     {
+        _current = startPage;
         _s = settings;
         _changed = changed;
         _preview = preview;

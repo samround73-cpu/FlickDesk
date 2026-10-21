@@ -194,10 +194,12 @@ internal sealed class App : Application
         _pairWindow.Activate();
     }
 
-    private void OpenSettings()
+    private void OpenSettings() => OpenSettings("Effects");
+
+    private void OpenSettings(string page)
     {
-        if (_settingsWindow is { } open) { open.Activate(); return; }
-        _settingsWindow = new SettingsWindow(_settings, OnSettingsChanged, PlayTestEffect, OpenPairing);
+        if (_settingsWindow is { } open) { open.Close(); }
+        _settingsWindow = new SettingsWindow(_settings, OnSettingsChanged, PlayTestEffect, OpenPairing, page);
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
         _settingsWindow.Activate();
@@ -422,12 +424,35 @@ internal sealed class App : Application
         menu.Items.Add("Pair a phone…", null, (_, _) => OpenPairing());
         menu.Items.Add("Send files to phone…", null, (_, _) => PickAndSend());
         menu.Items.Add("Send clipboard to phone", null, (_, _) => _ = SendClipboardAsync());
+        var phones = new WF.ToolStripMenuItem("Remove a phone");
+        foreach (var d in _settings.Devices())
+        {
+            var id = d.DeviceId; var name = d.Name;
+            phones.DropDownItems.Add($"{name}  ·  {(d.Online ? "online" : "last seen " + Ui.Ago(d.LastSeenUtc))}", null, (_, _) => ForgetPhone(id, name));
+        }
+        if (phones.DropDownItems.Count == 0) phones.Enabled = false;
+        else
+        {
+            phones.DropDownItems.Add(new WF.ToolStripSeparator());
+            phones.DropDownItems.Add("Manage phones…", null, (_, _) => OpenSettings("Phones"));
+        }
+        menu.Items.Add(phones);
         menu.Items.Add(new WF.ToolStripSeparator());
         menu.Items.Add(_settings.IsPaused ? "Resume receiving" : "Pause for 1 hour", null, (_, _) => TogglePause());
         menu.Items.Add("Settings…", null, (_, _) => OpenSettings());
         menu.Items.Add($"Open received files ({FolderLabel(_settings.SaveFolder)})", null, (_, _) => OpenSaveFolder());
         menu.Items.Add(new WF.ToolStripSeparator());
         menu.Items.Add("Quit FlickDesk", null, (_, _) => Shutdown());
+    }
+
+    private void ForgetPhone(string deviceId, string name)
+    {
+        if (MessageBox.Show($"Remove {name} from FlickDesk? It will need to pair again to send or receive.", "FlickDesk",
+                MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        _settings.ForgetDevice(deviceId);
+        OnSettingsChanged();
+        _settingsWindow?.RefreshDevices();
+        _flyout?.RefreshIfOpen();
     }
 
     private void PickAndSend()
