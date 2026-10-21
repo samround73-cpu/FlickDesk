@@ -8,7 +8,7 @@
 [latest release](https://github.com/samround73-cpu/FlickDesk/releases/latest).
 Every push to `main` also builds both (see the run's *Artifacts* on the [Actions tab](https://github.com/samround73-cpu/FlickDesk/actions/workflows/build.yml)).
 
-**Making a release:** tag a commit `vX.Y.Z` and push the tag – CI builds both apps and publishes the release with the files attached.
+**Making a release:** bump `<Version>` in `windows/FlickDesk/FlickDesk.csproj` (and `versionName`/`versionCode` in `android/app/build.gradle.kts`) and push to `main` – CI builds both apps, tags the commit and publishes the release with the files attached.
 
 Current version: 0.3.1
 

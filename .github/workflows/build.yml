@@ -3,7 +3,7 @@ name: Build
 on:
   push:
     branches: [main]
-    tags: ['v*']   # pushing a tag like v0.3.1 also publishes a GitHub Release
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -46,23 +46,44 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Runs on pushes to main (and v* tags). Publishes once per version: bump <Version> in
+    # FlickDesk.csproj (and versionName in android/app/build.gradle.kts) to cut a new release.
+    if: github.event_name == 'push'
     needs: [windows, android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+      - name: Work out the version
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="v$(grep -oP '(?<=<Version>)[^<]+' windows/FlickDesk/FlickDesk.csproj)"
+          echo "tag=$v" >> "$GITHUB_OUTPUT"
+          if gh release view "$v" >/dev/null 2>&1; then
+            echo "Release $v already exists - nothing to publish."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/download-artifact@v4
+        if: steps.ver.outputs.publish == 'true'
         with:
           path: dist
       - name: Name the files after the version
+        if: steps.ver.outputs.publish == 'true'
         run: |
-          v="${GITHUB_REF_NAME}"
+          v="${{ steps.ver.outputs.tag }}"
           mv dist/FlickDesk-windows-x64/FlickDesk.exe "dist/FlickDesk-${v}-windows-x64.exe"
           mv dist/Flick-android-debug/*.apk "dist/Flick-${v}-android.apk"
       - uses: softprops/action-gh-release@v2
+        if: steps.ver.outputs.publish == 'true'
         with:
-          name: Flick ${{ github.ref_name }}
+          tag_name: ${{ steps.ver.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Flick ${{ steps.ver.outputs.tag }}
           generate_release_notes: true
           files: |
             dist/FlickDesk-*-windows-x64.exe
