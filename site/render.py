@@ -3,6 +3,7 @@ Renders still pictures and GIFs of the scenes (needs Playwright + Pillow):
 
   python3 render.py stills <out-dir> [width height]   one JPG per scene (default 1250 x 833)
   python3 render.py gifs <out-dir> key[,key...]       looping GIFs for the README (640 px wide, 15 fps)
+  add --site to use the island-style scenes made for landing.great919.win (site_scenes.py)
 
 Frames are taken by pausing every CSS animation at an exact time, so the output is the same each run.
 """
@@ -14,7 +15,13 @@ import sys
 from PIL import Image
 from playwright.async_api import async_playwright
 
-from scenes import CSS, H, LOOP, SCENES, STILL, W
+import importlib
+
+_mod = importlib.import_module("site_scenes" if "--site" in sys.argv else "scenes")
+if "--site" in sys.argv:
+    sys.argv.remove("--site")
+CSS, LOOP, SCENES, STILL = _mod.CSS, _mod.LOOP, _mod.SCENES, _mod.STILL
+from scenes import H, W
 
 CHROME = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"
 PAGE = (f"<html><head><style>body{{margin:0;background:#000}}{CSS}"
