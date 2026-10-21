@@ -20,6 +20,10 @@ Going the other way, drag a file to the edge of the screen your phone sits on an
 
 Both stay on your own Wi-Fi. There's no account, no cloud, and every transfer is end-to-end encrypted.
 
+**Website:** [samround73-cpu.github.io/FlickDesk](https://samround73-cpu.github.io/FlickDesk/)
+
+<p align="center"><img src="docs/images/flick.gif" alt="A photo is flicked from the phone and lands on the PC with a ripple of light" width="80%"></p>
+
 ---
 
 ## Download
@@ -96,7 +100,9 @@ Folders are unpacked into **Download/Flick/*folder name***.
   If that fails, sending the same file again later still resumes, as long as it's within 3 days.
 - Folders are packed into a single bundle on the way and unpacked on arrival, with all their subfolders.
 
-<p align="center"><img src="docs/images/pc-to-phone.png" alt="Dragging a photo to the screen edge to send it to the phone" width="90%"></p>
+<p align="center"><img src="docs/images/resume.gif" alt="A big download drops its connection and carries on from the same point" width="80%"></p>
+
+<p align="center"><img src="docs/images/send.gif" alt="Dragging a photo to the screen edge: the send card slides in and the photo arrives on the phone" width="80%"></p>
 
 ### Clipboard
 - **Phone → PC:** use the **Clipboard** tab in Flick, or **Share → Flick** with text or a link.
@@ -112,7 +118,8 @@ Folders are unpacked into **Download/Flick/*folder name***.
 - **Removing a phone:** right-click the tray icon → **Remove a phone**, or use **Settings → Phones → Forget**.
   On the phone, tap the PC chip → **Forget this PC**.
 
-> The pictures on this page are illustrations of the apps.
+> The pictures on this page are illustrations of the apps. The animations come from `site/scenes.py`,
+> which also drives the [website](https://samround73-cpu.github.io/FlickDesk/) (`python3 site/build.py`, then `site/render.py` for stills and GIFs).
 
 ---
 
