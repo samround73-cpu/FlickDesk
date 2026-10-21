@@ -4,8 +4,11 @@
 
 [![Build](https://github.com/samround73-cpu/FlickDesk/actions/workflows/build.yml/badge.svg)](https://github.com/samround73-cpu/FlickDesk/actions/workflows/build.yml)
 
-**Get a build without installing anything:** open the [Actions tab](https://github.com/samround73-cpu/FlickDesk/actions/workflows/build.yml),
-click the latest green run, and download `FlickDesk-windows-x64` (the exe) and `Flick-android-debug` (the APK) under *Artifacts*.
+**Download:** grab `FlickDesk-…-windows-x64.exe` and `Flick-…-android.apk` from the
+[latest release](https://github.com/samround73-cpu/FlickDesk/releases/latest).
+Every push to `main` also builds both (see the run's *Artifacts* on the [Actions tab](https://github.com/samround73-cpu/FlickDesk/actions/workflows/build.yml)).
+
+**Making a release:** tag a commit `vX.Y.Z` and push the tag – CI builds both apps and publishes the release with the files attached.
 
 Current version: 0.3.1
 
