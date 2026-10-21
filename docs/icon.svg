@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1D2650"/>
+      <stop offset="1" stop-color="#070910"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.45" cy="0.42" r="0.55">
+      <stop offset="0" stop-color="#8A6BFF" stop-opacity="0.40"/>
+      <stop offset="1" stop-color="#8A6BFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="trail" x1="700" y1="480" x2="430" y2="350" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF6BD6" stop-opacity="0"/>
+      <stop offset="0.35" stop-color="#FF6BD6" stop-opacity="0.75"/>
+      <stop offset="0.7" stop-color="#9B7BFF" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#3DC7FF"/>
+    </linearGradient>
+    <radialGradient id="screenGlow" cx="0.5" cy="0.05" r="0.75">
+      <stop offset="0" stop-color="#B49BFF" stop-opacity="0.85"/>
+      <stop offset="0.45" stop-color="#5B5BD6" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#0E1222" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="photo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3DC7FF"/>
+      <stop offset="0.55" stop-color="#9B7BFF"/>
+      <stop offset="1" stop-color="#FF6BD6"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="228" fill="url(#bg)"/>
+  <rect width="1024" height="1024" rx="228" fill="url(#glow)"/>
+  <g id="glyph">
+    <g transform="rotate(12 670 640)">
+      <rect x="560" y="440" width="220" height="400" rx="54" fill="#0E1222"/>
+      <rect x="560" y="440" width="220" height="400" rx="54" fill="url(#screenGlow)"/>
+      <rect x="560" y="440" width="220" height="400" rx="54" fill="none" stroke="#F4F7FF" stroke-width="32"/>
+    </g>
+    <path d="M 700 480 C 668 380, 572 318, 420 318 L 452 418 C 570 400, 650 420, 700 480 Z" fill="url(#trail)"/>
+    <g transform="rotate(-14 330 330)">
+      <rect x="210" y="210" width="240" height="240" rx="52" fill="url(#photo)"/>
+      <rect x="210" y="210" width="240" height="240" rx="52" fill="none" stroke="#FFFFFF" stroke-width="22"/>
+      <circle cx="378" cy="284" r="28" fill="#FFFFFF"/>
+      <path d="M 236 420 L 312 330 L 366 386 L 394 360 L 428 420 Z" fill="#FFFFFF"/>
+    </g>
+  </g>
+</svg>

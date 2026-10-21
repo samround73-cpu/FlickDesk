@@ -1,95 +1,178 @@
+<p align="center">
+  <img src="docs/images/banner.png" alt="Flick: flick photos and files between your Android phone and Windows PC" width="100%">
+</p>
+
+<p align="center">
+  <a href="https://github.com/samround73-cpu/FlickDesk/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/samround73-cpu/FlickDesk?label=download&color=7CC4FF"></a>
+  <a href="https://github.com/samround73-cpu/FlickDesk/actions/workflows/build.yml"><img alt="Build" src="https://github.com/samround73-cpu/FlickDesk/actions/workflows/build.yml/badge.svg"></a>
+  <img alt="Android 10+" src="https://img.shields.io/badge/Android-10%2B-3DDC84">
+  <img alt="Windows 10/11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4">
+</p>
+
 # Flick + FlickDesk
 
-**Flick files between your Android phone and Windows PC — with a burst of light.**
+**Hold your phone next to your screen, long-press a photo and _flick_ it towards the PC.**
+A ripple of light washes in from that edge of the monitor and the file lands on your desktop.
+Going the other way, drag a file to the edge of the screen your phone sits on and let go.
 
-[![Build](https://github.com/samround73-cpu/FlickDesk/actions/workflows/build.yml/badge.svg)](https://github.com/samround73-cpu/FlickDesk/actions/workflows/build.yml)
+- **Flick** is the Android app (Kotlin, Jetpack Compose).
+- **FlickDesk** is the Windows app. It runs from the system tray (C#, WPF, .NET 8).
 
-**Download:** grab `FlickDesk-…-windows-x64.exe` and `Flick-…-android.apk` from the
-[latest release](https://github.com/samround73-cpu/FlickDesk/releases/latest).
-Every push to `main` also builds both (see the run's *Artifacts* on the [Actions tab](https://github.com/samround73-cpu/FlickDesk/actions/workflows/build.yml)).
+Both stay on your own Wi-Fi. There's no account, no cloud, and every transfer is end-to-end encrypted.
 
-**Making a release:** bump `<Version>` in `windows/FlickDesk/FlickDesk.csproj` (and `versionName`/`versionCode` in `android/app/build.gradle.kts`) and push to `main` – CI builds both apps, tags the commit and publishes the release with the files attached.
+---
 
-Current version: 0.3.4
+## Download
 
-Hold your phone next to your screen, long-press a photo, **flick it towards the PC**. A ripple of
-spectral light washes in from that edge of the monitor and the file lands on your desktop.
-The other way round: drag a file onto the glowing strip at the screen edge, or use the tray.
+| | App | File | Needs |
+|---|---|---|---|
+| <img src="docs/images/icon-256.png" width="40"> | **FlickDesk** for Windows | [**FlickDesk-windows-x64.exe**](https://github.com/samround73-cpu/FlickDesk/releases/latest/download/FlickDesk-windows-x64.exe) | Windows 10 (1903+) or 11, 64-bit |
+| <img src="docs/images/icon-256.png" width="40"> | **Flick** for Android | [**Flick-android.apk**](https://github.com/samround73-cpu/FlickDesk/releases/latest/download/Flick-android.apk) | Android 10 or newer |
 
-```
-flick/
-├── android/   Flick — Kotlin + Jetpack Compose (Android 10+)
-└── windows/   FlickDesk — C# / WPF tray app (.NET 8, Windows 10/11)
-```
+These links always point at the [latest release](https://github.com/samround73-cpu/FlickDesk/releases/latest).
+Older versions are on the [releases page](https://github.com/samround73-cpu/FlickDesk/releases).
 
-## What's new in 0.3
-- **Spectral Surge** (new default) on PC and phone: the whole screen answers. The bezel ignites from the
-  phone's side and runs round the frame, a bright glass wave crosses the screen, spectral rings ride it,
-  a warm/cool caustic line leads, and a flare with an anamorphic streak marks where the file came in.
-  A brief dim behind the light means it reads on white windows too.
-- On Windows the light is now drawn by the **Windows compositor (GPU)** in its own click-through window,
-  so it covers the full screen at your display's refresh rate. Settings → General → *Full-screen light (GPU)*
-  switches back to the classic renderer if it ever doesn't show.
-- **Sending to the phone** now ends with the screen's light collapsing into the phone's edge, and the drop
-  zone is a soft leak of light from the bezel with a "Drop to send to …" pill instead of a box.
-- New presets: **Halo** (just the glowing frame) and a full-screen **Ripple**; saturated palettes.
-- Build output moved: `bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\FlickDesk.exe`.
+---
 
-## What was new in 0.2
-- **QR pairing + end-to-end encryption.** FlickDesk shows a QR code; the phone scans it and both screens
-  show the same 6-digit number. Every transfer after that is AES-256-GCM encrypted with a key only
-  those two devices have. (Can't scan? Tap the PC under "Nearby" or enter its IP — you confirm the
-  number on both screens instead.)
-- **Refined effects** on both PC and phone: *Spectral Ripple* (three soft spectral rings with a
-  glassy warm/cool hairline), *Aurora Veil*, *Prism Sweep*, *Liquid Glass*, *Quiet* — with
-  palettes (Spectrum, Aurora, Ember, Glacier), intensity, speed, an optional chime, "stay quiet in
-  full-screen apps" and "reduce motion".
-- **Several PCs, one per direction.** Flick left for the desktop, up for the laptop. Tap a PC chip to change its side.
-- **Stacks.** Tap photos to select them, long-press any of them and flick once — they all go, and land fanned on the PC.
-- **Clipboard both ways.** Send text/links from the phone's Clipboard tab (or Share → Flick with text);
-  FlickDesk copies it automatically. Tray → *Send clipboard* goes the other way.
-- **History** on both sides, an **arrival card** on the phone (Open / Share), a **tray flyout** on Windows
-  (status, quick actions, last clipboard, today's transfers) and **Pause for 1 hour**.
-- **Receive in the background** on the phone (a quiet ongoing notification keeps Flick listening).
+## Set up in 3 minutes
 
-> **Upgrading from 0.1:** the protocol changed (it's encrypted now), so update **both** apps and pair once
-> with the QR code. Old pairings are ignored.
+### 1. Windows: run FlickDesk
+1. Download **FlickDesk-windows-x64.exe** and put it somewhere permanent (for example `Documents\FlickDesk`).
+   It's a single file, so there's nothing to install.
+2. Double-click it.
+   - **"Windows protected your PC"** (SmartScreen): the app isn't code-signed yet. Click **More info → Run anyway**.
+   - **Windows Firewall** asks about network access: tick **Private networks** and click **Allow**.
+     Without this the phone can't reach the PC.
+3. The **Pair a phone** window opens with a QR code. FlickDesk then lives in the **system tray**
+   (click the **^** arrow by the clock if you can't see it).
 
-## Build & run
+### 2. Android: install Flick
+1. On your phone, open the [**Flick-android.apk**](https://github.com/samround73-cpu/FlickDesk/releases/latest/download/Flick-android.apk) link and download it.
+2. Open the file. If asked, allow your browser or Files app to **install unknown apps**.
+   If Play Protect warns you, choose **Install anyway**. The app isn't on the Play Store yet.
+3. Open **Flick** and allow the photos, notifications and camera permissions when it asks.
 
-### Windows (FlickDesk)
-1. Install the [.NET 8 SDK](https://dotnet.microsoft.com/download).
-2. In `windows/FlickDesk`: `dotnet run` — or build an exe you can double-click:
-   `dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true`
-   → `bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\FlickDesk.exe`
-3. **Allow it through Windows Firewall on Private networks** when asked.
-4. First run opens *Pair a phone*. Later: **left-click** the tray orb for the flyout, **right-click** for the menu.
-   Settings → Effects to pick a look; Settings → General to start with Windows.
+### 3. Pair them
+Your phone and PC must be on the **same Wi-Fi** network.
 
-### Android (Flick)
-1. Open `android/` in Android Studio; if asked for a Gradle JDK choose **JVM 21**.
-2. Plug in your phone (USB debugging on) and press ▶ Run.
-3. Tap **+** → scan the code on your PC → check the number matches → **Yes, pair**.
+1. In Flick, tap **+** and scan the QR code on the PC.
+2. Check the 6-digit number matches on both screens, then tap **Yes, pair**.
+3. **Tell each side where the other is**, so the light comes from the right place:
+   - **On the phone:** tap the PC chip and choose **Left**, **Above** or **Right**.
+   - **On the PC:** go to **Settings → My phone sits on the…** and choose **Left**, **Right** or **Bottom**.
+
+   For example, if your phone sits to the right of the laptop, set the phone to **Left** and the PC to **Right**.
+
+<p align="center"><img src="docs/images/pairing.png" alt="Pairing with a QR code: the PC and the phone show the same 6-digit number" width="90%"></p>
+
+---
 
 ## Using it
-- **Phone → PC:** long-press a photo until it lifts, flick it towards the PC (or drag it to that edge). The angle
-  of the flick moves where along the PC's edge the light appears. Tap photos first to build a stack.
-- **PC → phone:** drag files onto the thin strip on the phone's edge of the screen (it widens as you hover),
-  or flyout → *Send files*. Photos land in Pictures/Flick, videos in Movies/Flick, other files in Download/Flick.
-- **Tell each side where the other is:** on the phone, tap the PC chip → *Left / Above / Right*; in FlickDesk,
-  Settings → *My phone sits on the* Left / Right / Bottom. (Phone to the right of the laptop ⇒ phone: Left, PC: Right.)
+
+### Phone → PC
+Long-press a photo until it lifts, then flick it towards the PC (or drag it to that edge of the phone).
+The angle of your flick sets where along the PC's edge the light appears.
+Files land on your **Desktop**, and a notification lets you open them.
+
+To send several at once, tap photos to select them, then long-press any of them and flick once. They all go.
+
+<p align="center"><img src="docs/images/phone-to-pc.png" alt="Flicking a photo from the phone to the PC" width="90%"></p>
+
+### PC → phone
+Drag files to the edge of the screen your phone sits on. A send card slides in for your phone.
+Let go and they're sent. If you've paired more than one phone, they're listed under the card;
+hover one to send to it instead.
+
+You can also send from the tray icon (**Send files to phone…**).
+On the phone, photos land in **Pictures/Flick**, videos in **Movies/Flick** and everything else in **Download/Flick**.
+
+<p align="center"><img src="docs/images/pc-to-phone.png" alt="Dragging a photo to the screen edge to send it to the phone" width="90%"></p>
+
+### Clipboard
+- **Phone → PC:** use the **Clipboard** tab in Flick, or **Share → Flick** with text or a link.
+  FlickDesk copies it to the PC's clipboard.
+- **PC → phone:** right-click the tray icon and choose **Send clipboard to phone**.
+
+### Handy extras
+- **History** on both sides of everything sent and received.
+- **Pause for 1 hour** from the tray menu.
+- **Effects:** choose a look in **Settings → Effects**: *Surge*, *Ripple*, *Halo*, *Glass* or *Quiet*.
+  Each has palettes, intensity and speed, an optional sound, and "reduce motion".
+- **Several PCs:** flick one way for the desktop and another way for the laptop.
+- **Removing a phone:** right-click the tray icon → **Remove a phone**, or use **Settings → Phones → Forget**.
+  On the phone, tap the PC chip → **Forget this PC**.
+
+> The pictures on this page are illustrations of the apps.
+
+---
+
+## Troubleshooting
+
+| Problem | Try this |
+|---|---|
+| The phone never finds the PC | Use the same Wi-Fi on both (not a guest network, since those often block devices from talking to each other). Check Windows Firewall allows FlickDesk on **Private** networks. Make sure your Wi-Fi is set as a **Private** network in Windows, not Public. You can also pair by typing the PC's IP address. |
+| The exe does nothing when opened | It may already be running, so check the tray. If it hit an error, a message box tells you, and the details are in `%LOCALAPPDATA%\FlickDesk\crash.log`. Please attach that file to an [issue](https://github.com/samround73-cpu/FlickDesk/issues). |
+| "App not installed" when updating the APK | Each release is currently signed with a different debug key, so Android won't install it over an older version. Uninstall Flick first, then install the new APK, then pair again. |
+| The same phone appears twice | It was paired again after a reinstall. Remove the older entry from the tray → **Remove a phone**. From 0.3.3 onwards, re-pairing replaces the old entry automatically. |
+| No light effect on the PC | Turn on **Settings → General → Full-screen light (GPU)**, or turn it off if it causes problems. FlickDesk falls back to a simpler renderer if needed. |
+
+---
+
+## Privacy & security
+- **Local only.** Devices find each other with a UDP broadcast on your network (port 47800) and connect directly over TCP
+  (47801 on the PC, 47802 on the phone). Nothing goes through the internet.
+- **Paired with a check number.** The QR code carries a one-time secret. Both screens show a 6-digit number derived from both devices' keys,
+  so you can see you've paired with the right device.
+- **Encrypted.** Each pair of devices shares a key from an ECDH P-256 exchange. Every connection gets a fresh session key,
+  and all data is sent with AES-256-GCM.
+- Keys are stored in `%AppData%\FlickDesk\settings.json` on the PC and in the app's private storage on the phone.
+
+---
+
+## Build from source
+
+```
+FlickDesk/
+├── android/    Flick: Kotlin + Jetpack Compose (Android 10+)
+├── windows/    FlickDesk: C# / WPF tray app (.NET 8, Windows 10/11)
+└── docs/       icon source (icon.svg) and README images
+```
+
+### Windows
+1. Install the [.NET 8 SDK](https://dotnet.microsoft.com/download).
+2. In `windows/FlickDesk`, run `dotnet run`, or build a single exe:
+   ```
+   dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
+   ```
+   The exe is written to `bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\FlickDesk.exe`.
+
+### Android
+1. Open `android/` in Android Studio. If asked for a Gradle JDK, choose **JVM 21**.
+2. Plug in your phone with USB debugging on, then press **Run**.
+   Or from a terminal: `./gradlew assembleDebug`.
+
+### Releases
+Every push to `main` builds both apps on GitHub Actions.
+To publish a release, bump `<Version>` in `windows/FlickDesk/FlickDesk.csproj` and
+`versionName`/`versionCode` in `android/app/build.gradle.kts`, then push.
+CI tags the commit `vX.Y.Z` and attaches both files to a new release.
+
+---
 
 ## How it works
+
 | Piece | Android | Windows |
 |---|---|---|
 | Discovery | `Discovery` listens for UDP beacons on 47800 | `DiscoveryBeacon` broadcasts every 2 s |
 | Pairing | `FlickClient.pair/confirm`, CameraX + ML Kit scanner | `PairingService`, `PairWindow` (QRCoder) |
-| Encryption | `Crypto.kt` (`FlickCrypto`, `SecureChannel`) | `Crypto.cs` — byte-for-byte the same |
+| Encryption | `Crypto.kt` (`FlickCrypto`, `SecureChannel`) | `Crypto.cs` (byte-for-byte the same) |
 | Phone → PC | `FlickClient` → PC:47801 | `TransferServer` |
-| PC → phone | `FlickServer` on 47802 (kept alive by `ReceiveService`) | `PhoneClient` |
-| Effects | `EdgeEffects.kt` — native paints, BlurMaskFilter, screen blending | `OverlayWindow` + `EffectTextures` — pre-rendered ring bitmaps, cached, GPU-transformed |
+| PC → phone | `FlickServer` on 47802 (kept alive by `ReceiveService`) | `PhoneClient`, `RailWindow` (drop card) |
+| Effects | `EdgeEffects.kt`: native paints, blur, screen blending | `CompositionOverlay` (Windows compositor, GPU); `OverlayWindow` fallback |
 
-### Protocol v2
+<details>
+<summary><b>Protocol v2 details</b></summary>
+
 Each TCP connection starts with **one plain JSON line**:
 
 ```jsonc
@@ -102,17 +185,33 @@ Each TCP connection starts with **one plain JSON line**:
   ← {"ok":true}            then AES-GCM frames both ways
 ```
 
-Keys: `K = HKDF-SHA256(ECDH-P256 secret, salt = QR token or 32×0x00, "flick-v2-key")`;
-per connection `S = HKDF-SHA256(K, salt = nonce, "flick-v2-session")`. Frame = `[4-byte BE length][ciphertext ‖ tag]`,
-GCM nonce = `[0,0,0,dir] ‖ 8-byte BE counter` (dir 0 = client→server). Check number = first 4 bytes of
-`SHA-256("flick-v2-sas" ‖ phonePub ‖ pcPub)` mod 10⁶.
+- **Keys:** `K = HKDF-SHA256(ECDH-P256 secret, salt = QR token or 32×0x00, "flick-v2-key")`.
+  Each connection uses `S = HKDF-SHA256(K, salt = nonce, "flick-v2-session")`.
+- **Frames:** `[4-byte BE length][ciphertext ‖ tag]`.
+  The GCM nonce is `[0,0,0,dir] ‖ 8-byte BE counter`, where dir 0 = client→server.
+- **Check number:** the first 4 bytes of `SHA-256("flick-v2-sas" ‖ phonePub ‖ pcPub)`, mod 10⁶.
 
-Messages inside the channel (JSON frames):
-`pair-confirm` · `hello {deviceName, port}` · `clip {text}` · `unpair` ·
-`file {name, size, mime, edgePos, batchIndex, batchCount}` → `{"ok":true}` (ready) → data frames → `{"ok":true,"savedAs"}`.
+Messages inside the channel are JSON frames:
+- `pair-confirm`
+- `hello {deviceName, port}`
+- `clip {text}`
+- `unpair`
+- `file {name, size, mime, edgePos, batchIndex, batchCount}`: the receiver replies `{"ok":true}` (ready), then the data frames follow, then `{"ok":true,"savedAs"}`.
+</details>
+
+---
 
 ## Known limits
-- Overlay and drop strip use the **primary monitor**.
-- **Folders** aren't sent (zip them). The PC → phone direction targets the most recently seen phone.
-- Guest/office Wi-Fi often blocks device-to-device traffic; use "Enter IP" if the PC never appears.
-- Keys are stored in `%AppData%\FlickDesk\settings.json` and the app's private storage on the phone.
+- The light effect and the drop card use the **primary monitor**.
+- **Folders** can't be sent. Zip them first.
+- The APK is debug-signed, so updates need an uninstall first (see Troubleshooting).
+- The Windows exe isn't code-signed, so SmartScreen warns on first run.
+
+## Changelog
+- **0.3.5:** new app icon (Android adaptive and themed icon, Windows exe and tray). Download links that never change.
+- **0.3.4:** new *Halo Card* drop panel on Windows; quiet 8-bit arrival sound.
+- **0.3.3:** remove phones from the tray menu; re-pairing no longer duplicates a phone.
+- **0.3.2:** fixed the release exe not starting; added an error message and crash log.
+- **0.3.1:** GitHub releases; full-screen *Spectral Surge* light drawn by the Windows compositor; new presets and palettes.
+- **0.2:** QR pairing and end-to-end encryption, clipboard both ways, stacks, history, several PCs, receiving in the background.
+- **0.1:** first version.

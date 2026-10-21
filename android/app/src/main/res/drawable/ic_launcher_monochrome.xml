@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+    <!-- Themed (Material You) icon: one colour, the system tints it. -->
+    <group android:scaleX="0.8" android:scaleY="0.8" android:pivotX="512" android:pivotY="520">
+        <group android:rotation="12" android:pivotX="670" android:pivotY="640">
+            <path android:pathData="M614,440 H726 A54,54 0 0 1 780,494 V786 A54,54 0 0 1 726,840 H614 A54,54 0 0 1 560,786 V494 A54,54 0 0 1 614,440 Z" android:strokeColor="#FFFFFFFF" android:strokeWidth="32" />
+        </group>
+        <path android:pathData="M700,480 C668,380 572,318 420,318 L452,418 C570,400 650,420 700,480 Z" android:fillColor="#FFFFFFFF" />
+        <group android:rotation="-14" android:pivotX="330" android:pivotY="330">
+            <path android:pathData="M262,210 H398 A52,52 0 0 1 450,262 V398 A52,52 0 0 1 398,450 H262 A52,52 0 0 1 210,398 V262 A52,52 0 0 1 262,210 Z" android:fillColor="#FFFFFFFF" />
+        </group>
+    </group>
+</vector>

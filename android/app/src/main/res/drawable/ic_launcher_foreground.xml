@@ -1,28 +1,48 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A glowing orb with a card flicking out of it. 108dp adaptive-icon canvas, safe zone 18..90. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <path android:pathData="M54,54m-30,0a30,30 0,1 1,60 0a30,30 0,1 1,-60 0">
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+    <!-- Flick: a photo flicked out of a phone on a spectral trail. Source: docs/icon.svg -->
+    <group android:scaleX="0.8" android:scaleY="0.8" android:pivotX="512" android:pivotY="520">
+        <group android:rotation="12" android:pivotX="670" android:pivotY="640">
+            <path android:pathData="M614,440 H726 A54,54 0 0 1 780,494 V786 A54,54 0 0 1 726,840 H614 A54,54 0 0 1 560,786 V494 A54,54 0 0 1 614,440 Z" android:fillColor="#FF0E1222" />
+            <path android:pathData="M614,440 H726 A54,54 0 0 1 780,494 V786 A54,54 0 0 1 726,840 H614 A54,54 0 0 1 560,786 V494 A54,54 0 0 1 614,440 Z">
         <aapt:attr name="android:fillColor">
-            <gradient
-                android:type="radial"
-                android:centerX="54"
-                android:centerY="54"
-                android:gradientRadius="30">
-                <item android:offset="0" android:color="#FFFFFFFF" />
-                <item android:offset="0.45" android:color="#FF8AD4FF" />
-                <item android:offset="1" android:color="#002A6CFF" />
+            <gradient android:type="radial" android:centerX="670" android:centerY="460" android:gradientRadius="300">
+                <item android:offset="0" android:color="#D9B49BFF" />
+                <item android:offset="0.45" android:color="#595B5BD6" />
+                <item android:offset="1" android:color="#000E1222" />
             </gradient>
         </aapt:attr>
-    </path>
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M60,34 L76,38 L70,62 L54,58 Z" />
-    <path
-        android:fillColor="#FF2A8CFF"
-        android:pathData="M61.5,37 L73,39.8 L69,55 L57.5,52.2 Z" />
+            </path>
+            <path android:pathData="M614,440 H726 A54,54 0 0 1 780,494 V786 A54,54 0 0 1 726,840 H614 A54,54 0 0 1 560,786 V494 A54,54 0 0 1 614,440 Z" android:strokeColor="#FFF4F7FF" android:strokeWidth="32" />
+        </group>
+        <path android:pathData="M700,480 C668,380 572,318 420,318 L452,418 C570,400 650,420 700,480 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="700" android:startY="480" android:endX="430" android:endY="350">
+                <item android:offset="0" android:color="#00FF6BD6" />
+                <item android:offset="0.35" android:color="#BFFF6BD6" />
+                <item android:offset="0.7" android:color="#F29B7BFF" />
+                <item android:offset="1" android:color="#FF3DC7FF" />
+            </gradient>
+        </aapt:attr>
+        </path>
+        <group android:rotation="-14" android:pivotX="330" android:pivotY="330">
+            <path android:pathData="M262,210 H398 A52,52 0 0 1 450,262 V398 A52,52 0 0 1 398,450 H262 A52,52 0 0 1 210,398 V262 A52,52 0 0 1 262,210 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="210" android:startY="210" android:endX="450" android:endY="450">
+                <item android:offset="0" android:color="#FF3DC7FF" />
+                <item android:offset="0.55" android:color="#FF9B7BFF" />
+                <item android:offset="1" android:color="#FFFF6BD6" />
+            </gradient>
+        </aapt:attr>
+            </path>
+            <path android:pathData="M262,210 H398 A52,52 0 0 1 450,262 V398 A52,52 0 0 1 398,450 H262 A52,52 0 0 1 210,398 V262 A52,52 0 0 1 262,210 Z" android:strokeColor="#FFFFFFFF" android:strokeWidth="22" />
+            <path android:pathData="M350,284 a28,28 0 1,0 56,0 a28,28 0 1,0 -56,0 Z" android:fillColor="#FFFFFFFF" />
+            <path android:pathData="M236,420 L312,330 L366,386 L394,360 L428,420 Z" android:fillColor="#FFFFFFFF" />
+        </group>
+    </group>
 </vector>

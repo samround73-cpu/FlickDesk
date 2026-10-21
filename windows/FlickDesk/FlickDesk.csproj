@@ -15,7 +15,8 @@
     <RootNamespace>FlickDesk</RootNamespace>
     <StartupObject>FlickDesk.Program</StartupObject>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.3.4</Version>
+    <ApplicationIcon>FlickDesk.ico</ApplicationIcon>
+    <Version>0.3.5</Version>
     <!-- Lets the project also build from macOS/Linux CI. -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <!-- Single-file publish: WPF's native DLLs (wpfgfx, PresentationNative, D3DCompiler...) must be
@@ -23,6 +24,11 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The same icon, embedded so the tray can load it at the right size. -->
+    <EmbeddedResource Include="FlickDesk.ico" LogicalName="FlickDesk.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- QR code generation for pairing (MIT licence). -->

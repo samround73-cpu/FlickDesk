@@ -485,18 +485,16 @@ internal sealed class App : Application
 
     private static SD.Icon MakeTrayIcon()
     {
+        // The app icon, picked at the tray's size (16 px at 100 %, larger on high-DPI screens).
+        using var stream = typeof(App).Assembly.GetManifestResourceStream("FlickDesk.ico");
+        if (stream is not null) return new SD.Icon(stream, WF.SystemInformation.SmallIconSize);
+
         using var bmp = new SD.Bitmap(32, 32);
         using (var g = SD.Graphics.FromImage(bmp))
         {
             g.SmoothingMode = SD.Drawing2D.SmoothingMode.AntiAlias;
             g.Clear(SD.Color.Transparent);
-            using var path = new SD.Drawing2D.GraphicsPath();
-            path.AddEllipse(2, 2, 28, 28);
-            using var brush = new SD.Drawing2D.PathGradientBrush(path)
-            {
-                CenterColor = SD.Color.White,
-                SurroundColors = new[] { SD.Color.FromArgb(255, 40, 140, 255) },
-            };
+            using var brush = new SD.SolidBrush(SD.Color.FromArgb(255, 124, 196, 255));
             g.FillEllipse(brush, 2, 2, 28, 28);
         }
         return SD.Icon.FromHandle(bmp.GetHicon());
