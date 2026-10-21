@@ -5,7 +5,7 @@ using System.Text;
 
 namespace FlickDesk;
 
-/// <summary>A soft, low "bloom" synthesised at startup (no audio files to ship).</summary>
+/// <summary>A quiet 8-bit "pickup" blip synthesised at startup (no audio files to ship).</summary>
 internal static class Chime
 {
     // Kept alive for the app's lifetime: async playback reads from the player's buffer.
@@ -25,25 +25,27 @@ internal static class Chime
     private static byte[] Build()
     {
         const int rate = 44100;
-        const double seconds = 0.7;
+        const double seconds = 0.26;
         int n = (int)(rate * seconds);
         var samples = new short[n];
 
-        // One warm, rounded tone: A4 gliding a touch down to G4 with a quiet fifth above it.
-        // A slow 25 ms fade-in (no click), a long soft tail and pure sines only, so nothing is bright or sharp.
-        double phaseA = 0, phaseB = 0;
+        // Two quick notes on a 25% pulse wave, like an old console's pickup sound: E5 then B5.
+        // The volume steps down in 16 levels (as 4-bit sound chips did) and stays low overall.
+        (double freq, double start, double length)[] notes = { (659.3, 0.0, 0.07), (987.8, 0.07, 0.19) };
         for (int i = 0; i < n; i++)
         {
             double t = i / (double)rate;
-            double freq = 392 + (440 - 392) * Math.Exp(-t * 18);           // 440 Hz -> 392 Hz
-            phaseA += 2 * Math.PI * freq / rate;
-            phaseB += 2 * Math.PI * freq * 1.5 / rate;
-            double attack = 0.5 - 0.5 * Math.Cos(Math.PI * Math.Min(1, t / 0.025));
-            double env = attack * Math.Exp(-t * 5.5);
-            double fifth = 0.18 * Math.Exp(-t * 9);                         // fades faster than the body
-            double v = env * (Math.Sin(phaseA) + fifth * Math.Sin(phaseB));
-            double tail = Math.Min(1, (seconds - t) / 0.05);                // no click at the very end
-            samples[i] = (short)(Math.Clamp(v * tail, -1, 1) * short.MaxValue * 0.28);
+            double v = 0;
+            foreach (var (freq, start, length) in notes)
+            {
+                double u = t - start;
+                if (u < 0 || u >= length) continue;
+                double phase = (u * freq) % 1.0;
+                double pulse = phase < 0.25 ? 1 : -1;
+                double level = Math.Floor(15 * Math.Exp(-u * 14) + 0.5) / 15;    // 4-bit volume envelope
+                v += pulse * level;
+            }
+            samples[i] = (short)(Math.Clamp(v, -1, 1) * short.MaxValue * 0.11);
         }
 
         using var ms = new MemoryStream();

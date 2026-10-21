@@ -12,8 +12,8 @@ android {
         applicationId = "dev.flick.app"
         minSdk = 29 // Android 10: scoped-storage MediaStore APIs, loadThumbnail, hardware BlurMaskFilter
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.3.3"
+        versionCode = 6
+        versionName = "0.3.4"
     }
 
     buildTypes {

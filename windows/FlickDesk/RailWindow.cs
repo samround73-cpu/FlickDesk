@@ -11,36 +11,51 @@ using System.Windows.Threading;
 namespace FlickDesk;
 
 /// <summary>
-/// The drop target on the phone's edge: a slim rail of your devices that slides in only while
-/// you drag files to that edge. The device under the cursor grows into a "dock" card – a
-/// drawing of the phone whose screen lights up, framed by a slowly turning spectral rim. Drop,
-/// and the file lands on that phone's screen, then "Sent ✓" and the rail tucks away.
+/// The drop target on the phone's edge ("Halo Card"). While you drag files to that edge a
+/// frosted card slides in for the phone you'll send to: a soft accent halo, a phone glyph in a
+/// breathing glow, its name and "Release to send 1 photo". Other paired devices sit in a small
+/// pill underneath – hover one to switch the card to it. A thin light line marks the edge.
+/// Drop, and the photo appears on the glyph's screen, then "Sent ✓" and the card tucks away.
 ///
 /// Idle, nothing is visible and the edge is fully click-through. While the left mouse button
 /// is held (see MouseButtonWatcher) a 1/255-alpha sensor strip on the edge becomes hit-testable,
-/// so a file dragged to the edge opens the rail.
+/// so a file dragged to the edge opens the card.
 /// </summary>
 internal sealed class RailWindow : Window
 {
-    private const double RailWidth = 280;
+    private const double PanelWidth = 236;
+    private const double CardWidth = 216;
+    private const double CardHeight = 260;
     private const double SensorDepth = 22;
-    private const double CompactHeight = 62;
-    private const double DockHeight = 268;
+
+    private static readonly Color AccentColor = Color.FromRgb(0x7C, 0xC4, 0xFF);
 
     private readonly Func<List<TrustedDevice>> _devices;
-    private readonly Func<EffectPalette> _palette;
     private readonly Grid _root = new() { Background = Brushes.Transparent };
     private readonly Border _sensor = new() { Background = new SolidColorBrush(Color.FromArgb(1, 255, 255, 255)) };
-    private readonly Border _panel = new();
-    private readonly StackPanel _rows = new();
+    private readonly Border _edgeLine = new() { IsHitTestVisible = false, Opacity = 0, CornerRadius = new CornerRadius(2) };
+    private readonly StackPanel _panel = new();
     private readonly TranslateTransform _slide = new();
+    private readonly ScaleTransform _panelScale = new(1, 1);
     private readonly List<Row> _rowList = new();
     private readonly DispatcherTimer _closeTimer = new() { Interval = TimeSpan.FromMilliseconds(320) };
     private readonly DispatcherTimer _armTimer = new() { Interval = TimeSpan.FromMilliseconds(120) };
     private readonly DispatcherTimer _safety = new() { Interval = TimeSpan.FromSeconds(20) };
+
+    // The card (shared by whichever device is "hot").
+    private readonly Border _card = new();
+    private readonly TextBlock _cardName = new() { FontSize = 16, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = CardWidth - 28 };
+    private readonly TextBlock _cardStatus = new() { FontSize = 12.5, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0) };
+    private readonly Image _cardPhoto = new() { Stretch = Stretch.UniformToFill, Opacity = 0 };
+    private readonly ScaleTransform _haloScale = new(1, 1);
+    private readonly Border _halo = new();
+    private readonly WrapPanel _pillItems = new() { HorizontalAlignment = HorizontalAlignment.Center };
+    private readonly Border _pill = new();
+
     private Edge _edge = Edge.Right;
     private bool _open, _buttonDown, _busy;
     private Row? _hot;
+    private string _dropText = "Release to send";
 
     /// <summary>Args: file paths, the device they were dropped on, drop point in screen DIPs.</summary>
     public event Action<string[], TrustedDevice, Point>? FilesDropped;
@@ -48,21 +63,12 @@ internal sealed class RailWindow : Window
     private sealed class Row
     {
         public required TrustedDevice Device { get; init; }
-        public required Border Root { get; init; }
-        public required FrameworkElement Compact { get; init; }
-        public required FrameworkElement Dock { get; init; }
-        public required ScaleTransform DockScale { get; init; }
-        public required Border Lit { get; init; }
-        public required Image Photo { get; init; }
-        public required TextBlock Status { get; init; }
-        public required Image Rim { get; init; }
-        public required RotateTransform RimSpin { get; init; }
+        public required Border Item { get; init; }
     }
 
     public RailWindow(Func<List<TrustedDevice>> devices, Func<EffectPalette> palette)
     {
         _devices = devices;
-        _palette = palette;
 
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
@@ -76,25 +82,25 @@ internal sealed class RailWindow : Window
         Foreground = Ui.Text;
         UseLayoutRounding = true;
 
-        var header = new TextBlock
-        {
-            Text = "SEND TO", FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Ui.Faint,
-            Margin = new Thickness(6, 2, 0, 8),
-        };
-        var stack = new StackPanel();
-        stack.Children.Add(header);
-        stack.Children.Add(_rows);
-        _panel.Child = stack;
-        _panel.Padding = new Thickness(10);
-        _panel.CornerRadius = new CornerRadius(20);
-        _panel.Background = new SolidColorBrush(Color.FromArgb(236, 20, 22, 29));
-        _panel.BorderBrush = new SolidColorBrush(Color.FromArgb(38, 255, 255, 255));
-        _panel.BorderThickness = new Thickness(1);
-        _panel.Effect = new DropShadowEffect { BlurRadius = 34, ShadowDepth = 8, Opacity = 0.5 };
-        _panel.RenderTransform = _slide;
+        BuildCard();
+        _pill.Child = _pillItems;
+        _pill.Padding = new Thickness(6);
+        _pill.Margin = new Thickness(0, 16, 0, 0);
+        _pill.CornerRadius = new CornerRadius(22);
+        _pill.HorizontalAlignment = HorizontalAlignment.Center;
+        _pill.Background = new SolidColorBrush(Color.FromArgb(200, 24, 27, 35));
+        _pill.BorderBrush = new SolidColorBrush(Color.FromArgb(18, 255, 255, 255));
+        _pill.BorderThickness = new Thickness(1);
+
+        _panel.Children.Add(_card);
+        _panel.Children.Add(_pill);
+        _panel.Width = PanelWidth;
+        _panel.RenderTransformOrigin = new Point(0.5, 0.5);
+        _panel.RenderTransform = new TransformGroup { Children = { _panelScale, _slide } };
         _panel.Opacity = 0;
         _panel.Visibility = Visibility.Collapsed;
 
+        _root.Children.Add(_edgeLine);
         _root.Children.Add(_sensor);
         _root.Children.Add(_panel);
         Content = _root;
@@ -119,6 +125,56 @@ internal sealed class RailWindow : Window
         DragOver += (_, e) => { _closeTimer.Stop(); OnDrag(e); };
         DragLeave += (_, _) => _closeTimer.Start();
         Drop += OnDrop;
+    }
+
+    private void BuildCard()
+    {
+        // Phone glyph: an outlined handset whose "screen" shows the photo once it's dropped.
+        var screen = new Border { CornerRadius = new CornerRadius(7), ClipToBounds = true, Margin = new Thickness(3), Child = _cardPhoto };
+        var notch = new Border { Width = 8, Height = 2, CornerRadius = new CornerRadius(1), Background = Ui.B("#E6EEF8"), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 4, 0, 0) };
+        var glyphGrid = new Grid();
+        glyphGrid.Children.Add(screen);
+        glyphGrid.Children.Add(notch);
+        var glyph = new Border
+        {
+            Width = 40, Height = 68, CornerRadius = new CornerRadius(11),
+            BorderBrush = Ui.B("#E6EEF8"), BorderThickness = new Thickness(2), Child = glyphGrid,
+        };
+
+        _halo.Width = 108;
+        _halo.Height = 108;
+        _halo.CornerRadius = new CornerRadius(54);
+        _halo.Background = new RadialGradientBrush
+        {
+            GradientOrigin = new Point(0.5, 0.45), Center = new Point(0.5, 0.45), RadiusX = 0.5, RadiusY = 0.5,
+            GradientStops =
+            {
+                new GradientStop(Color.FromArgb(82, AccentColor.R, AccentColor.G, AccentColor.B), 0),
+                new GradientStop(Color.FromArgb(0, AccentColor.R, AccentColor.G, AccentColor.B), 1),
+            },
+        };
+        _halo.RenderTransformOrigin = new Point(0.5, 0.5);
+        _halo.RenderTransform = _haloScale;
+        var haloHost = new Grid { Width = 108, Height = 108, HorizontalAlignment = HorizontalAlignment.Center };
+        haloHost.Children.Add(_halo);
+        haloHost.Children.Add(new Border { Child = glyph, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+
+        var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+        stack.Children.Add(haloHost);
+        _cardName.Margin = new Thickness(0, 14, 0, 0);
+        stack.Children.Add(_cardName);
+        stack.Children.Add(_cardStatus);
+
+        _card.Width = CardWidth;
+        _card.Height = CardHeight;
+        _card.HorizontalAlignment = HorizontalAlignment.Center;
+        _card.CornerRadius = new CornerRadius(28);
+        _card.Background = new SolidColorBrush(Color.FromArgb(214, 24, 27, 35));
+        _card.BorderBrush = new SolidColorBrush(Color.FromArgb(150, AccentColor.R, AccentColor.G, AccentColor.B));
+        _card.BorderThickness = new Thickness(1);
+        // The halo: a soft accent glow around the card rather than a hard drop shadow.
+        _card.Effect = new DropShadowEffect { Color = AccentColor, BlurRadius = 38, ShadowDepth = 0, Opacity = 0.45 };
+        _card.Child = stack;
     }
 
     // ---------------------------------------------------------------- arming
@@ -147,10 +203,12 @@ internal sealed class RailWindow : Window
         _edge = edge;
         var wa = SystemParameters.WorkArea;
         bool vertical = edge != Edge.Bottom;
+        var accent = Color.FromArgb(220, AccentColor.R, AccentColor.G, AccentColor.B);
+        var clear = Color.FromArgb(0, AccentColor.R, AccentColor.G, AccentColor.B);
 
         if (vertical)
         {
-            Width = RailWidth + 60;
+            Width = PanelWidth + 60;
             Height = Math.Min(wa.Height * 0.86, 820);
             Top = wa.Top + (wa.Height - Height) / 2;
             Left = edge == Edge.Left ? wa.Left : wa.Right - Width;
@@ -158,36 +216,50 @@ internal sealed class RailWindow : Window
             _sensor.Height = double.NaN;
             _sensor.HorizontalAlignment = edge == Edge.Left ? HorizontalAlignment.Left : HorizontalAlignment.Right;
             _sensor.VerticalAlignment = VerticalAlignment.Stretch;
-            _panel.Width = RailWidth;
+            _edgeLine.Width = 3;
+            _edgeLine.Height = Math.Min(Height * 0.6, 420);
+            _edgeLine.HorizontalAlignment = _sensor.HorizontalAlignment;
+            _edgeLine.VerticalAlignment = VerticalAlignment.Center;
+            _edgeLine.Background = new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0), EndPoint = new Point(0, 1),
+                GradientStops = { new GradientStop(clear, 0), new GradientStop(accent, 0.5), new GradientStop(clear, 1) },
+            };
             _panel.HorizontalAlignment = edge == Edge.Left ? HorizontalAlignment.Left : HorizontalAlignment.Right;
             _panel.VerticalAlignment = VerticalAlignment.Center;
-            _panel.Margin = edge == Edge.Left ? new Thickness(14, 0, 0, 0) : new Thickness(0, 0, 14, 0);
-            _rows.Orientation = Orientation.Vertical;
+            _panel.Margin = edge == Edge.Left ? new Thickness(22, 0, 0, 0) : new Thickness(0, 0, 22, 0);
         }
         else
         {
             Width = Math.Min(wa.Width * 0.7, 1000);
-            Height = DockHeight + 110;
+            Height = CardHeight + 160;
             Left = wa.Left + (wa.Width - Width) / 2;
             Top = wa.Bottom - Height;
             _sensor.Height = SensorDepth;
             _sensor.Width = double.NaN;
             _sensor.VerticalAlignment = VerticalAlignment.Bottom;
             _sensor.HorizontalAlignment = HorizontalAlignment.Stretch;
-            _panel.Width = double.NaN;
+            _edgeLine.Height = 3;
+            _edgeLine.Width = Math.Min(Width * 0.6, 520);
+            _edgeLine.VerticalAlignment = VerticalAlignment.Bottom;
+            _edgeLine.HorizontalAlignment = HorizontalAlignment.Center;
+            _edgeLine.Background = new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0), EndPoint = new Point(1, 0),
+                GradientStops = { new GradientStop(clear, 0), new GradientStop(accent, 0.5), new GradientStop(clear, 1) },
+            };
             _panel.HorizontalAlignment = HorizontalAlignment.Center;
             _panel.VerticalAlignment = VerticalAlignment.Bottom;
-            _panel.Margin = new Thickness(0, 0, 0, 14);
-            _rows.Orientation = Orientation.Horizontal;
+            _panel.Margin = new Thickness(0, 0, 0, 18);
         }
         ResetHidden();
     }
 
     private Vector HiddenOffset => _edge switch
     {
-        Edge.Left => new Vector(-(RailWidth + 80), 0),
-        Edge.Right => new Vector(RailWidth + 80, 0),
-        _ => new Vector(0, DockHeight + 140),
+        Edge.Left => new Vector(-60, 0),
+        Edge.Right => new Vector(60, 0),
+        _ => new Vector(0, 60),
     };
 
     private void ResetHidden()
@@ -198,6 +270,13 @@ internal sealed class RailWindow : Window
         _slide.Y = HiddenOffset.Y;
         _panel.Opacity = 0;
         _panel.Visibility = Visibility.Collapsed;
+        _edgeLine.BeginAnimation(OpacityProperty, null);
+        _edgeLine.Opacity = 0;
+        _haloScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        _haloScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+        _cardPhoto.BeginAnimation(OpacityProperty, null);
+        _cardPhoto.Opacity = 0;
+        _cardPhoto.Source = null;
         _open = false;
         _hot = null;
     }
@@ -210,19 +289,33 @@ internal sealed class RailWindow : Window
         _open = true;
         BuildRows();
         _panel.Visibility = Visibility.Visible;
-        var ease = new BackEase { Amplitude = 0.22, EasingMode = EasingMode.EaseOut };
-        var d = TimeSpan.FromMilliseconds(300);
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var d = TimeSpan.FromMilliseconds(280);
         _slide.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(HiddenOffset.X, 0, d) { EasingFunction = ease });
         _slide.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(HiddenOffset.Y, 0, d) { EasingFunction = ease });
-        _panel.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)));
-        if (_rowList.Count == 1) SetHot(_rowList[0]); // one phone: open straight into the dock
+        var grow = new DoubleAnimation(0.94, 1, d) { EasingFunction = new BackEase { Amplitude = 0.25, EasingMode = EasingMode.EaseOut } };
+        _panelScale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+        _panelScale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+        _panel.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180)));
+        _edgeLine.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 0.85, TimeSpan.FromMilliseconds(260)));
+
+        // The glow round the phone glyph breathes gently while the card is open.
+        var breathe = new DoubleAnimation(1, 1.08, TimeSpan.FromMilliseconds(1300))
+        {
+            AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever,
+            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
+        };
+        _haloScale.BeginAnimation(ScaleTransform.ScaleXProperty, breathe);
+        _haloScale.BeginAnimation(ScaleTransform.ScaleYProperty, breathe);
+
+        if (_rowList.Count > 0) SetHot(_rowList[0]);
     }
 
     private void CloseRail()
     {
         if (!_open) return;
         var ease = new CubicEase { EasingMode = EasingMode.EaseIn };
-        var d = TimeSpan.FromMilliseconds(240);
+        var d = TimeSpan.FromMilliseconds(220);
         var slideX = new DoubleAnimation(0, HiddenOffset.X, d) { EasingFunction = ease };
         slideX.Completed += (_, _) =>
         {
@@ -232,13 +325,28 @@ internal sealed class RailWindow : Window
         };
         _slide.BeginAnimation(TranslateTransform.XProperty, slideX);
         _slide.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(0, HiddenOffset.Y, d) { EasingFunction = ease });
+        var shrink = new DoubleAnimation(1, 0.96, d) { EasingFunction = ease };
+        _panelScale.BeginAnimation(ScaleTransform.ScaleXProperty, shrink);
+        _panelScale.BeginAnimation(ScaleTransform.ScaleYProperty, shrink);
         _panel.BeginAnimation(OpacityProperty, new DoubleAnimation(1, 0, d));
-        foreach (var r in _rowList) r.RimSpin.BeginAnimation(RotateTransform.AngleProperty, null);
+        _edgeLine.BeginAnimation(OpacityProperty, new DoubleAnimation(0, d));
     }
 
     // ---------------------------------------------------------------- drag & drop
 
     private static bool HasFiles(DragEventArgs e) => e.Data.GetDataPresent(DataFormats.FileDrop);
+
+    private static readonly HashSet<string> ImageExts = new(StringComparer.OrdinalIgnoreCase)
+        { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".bmp", ".tif", ".tiff" };
+
+    private static string DropText(string[]? paths)
+    {
+        int n = paths?.Length ?? 0;
+        if (n == 0) return "Release to send";
+        bool photos = paths!.All(p => ImageExts.Contains(System.IO.Path.GetExtension(p)));
+        string noun = photos ? (n == 1 ? "photo" : "photos") : (n == 1 ? "file" : "files");
+        return $"Release to send {n} {noun}";
+    }
 
     private void OnDrag(DragEventArgs e)
     {
@@ -248,6 +356,7 @@ internal sealed class RailWindow : Window
             e.Effects = DragDropEffects.None;
             return;
         }
+        if (!_open) _dropText = DropText(e.Data.GetData(DataFormats.FileDrop) as string[]);
         OpenRail();
         if (RowUnder(e) is { } under) SetHot(under);
         e.Effects = _hot is not null ? DragDropEffects.Copy : DragDropEffects.None;
@@ -257,8 +366,8 @@ internal sealed class RailWindow : Window
     {
         foreach (var r in _rowList)
         {
-            var p = e.GetPosition(r.Root);
-            if (p.X >= 0 && p.Y >= 0 && p.X <= r.Root.ActualWidth && p.Y <= r.Root.ActualHeight) return r;
+            var p = e.GetPosition(r.Item);
+            if (p.X >= 0 && p.Y >= 0 && p.X <= r.Item.ActualWidth && p.Y <= r.Item.ActualHeight) return r;
         }
         return null;
     }
@@ -275,18 +384,15 @@ internal sealed class RailWindow : Window
         _busy = true;
         _safety.Start();
 
-        hot.Status.Text = paths.Length > 1 ? $"Sending {paths.Length} files…" : "Sending…";
-        hot.Status.Foreground = Ui.Muted;
-        var thumb = await Thumbnails.LoadAsync(paths[0]);
-        hot.Photo.Source = thumb;
-        var land = new DoubleAnimation(0.6, 1, TimeSpan.FromMilliseconds(380)) { EasingFunction = new BackEase { Amplitude = 0.3, EasingMode = EasingMode.EaseOut } };
-        var photoScale = new ScaleTransform(0.6, 0.6);
-        hot.Photo.RenderTransformOrigin = new Point(0.5, 0.5);
-        hot.Photo.RenderTransform = photoScale;
-        photoScale.BeginAnimation(ScaleTransform.ScaleXProperty, land);
-        photoScale.BeginAnimation(ScaleTransform.ScaleYProperty, land);
-        hot.Photo.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)));
-        hot.Lit.BeginAnimation(OpacityProperty, new DoubleAnimation(1, 0.25, TimeSpan.FromMilliseconds(500)));
+        _cardStatus.Text = paths.Length > 1 ? $"Sending {paths.Length} files…" : "Sending…";
+        _cardStatus.Foreground = Ui.Muted;
+        _cardPhoto.Source = await Thumbnails.LoadAsync(paths[0]);
+        _cardPhoto.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220)));
+
+        // One soft pulse of the halo as the file "lands".
+        var pulse = new DoubleAnimation(1, 1.22, TimeSpan.FromMilliseconds(220)) { AutoReverse = true, EasingFunction = new SineEase() };
+        _haloScale.BeginAnimation(ScaleTransform.ScaleXProperty, pulse);
+        _haloScale.BeginAnimation(ScaleTransform.ScaleYProperty, pulse);
 
         FilesDropped?.Invoke(paths, hot.Device, screenPoint);
     }
@@ -294,11 +400,10 @@ internal sealed class RailWindow : Window
     /// <summary>Called by the app when the transfer finishes.</summary>
     public void ShowResult(TrustedDevice device, bool ok, string? message = null)
     {
-        var row = _rowList.FirstOrDefault(r => r.Device.DeviceId == device.DeviceId);
-        if (row is not null)
+        if (_hot is not null && _hot.Device.DeviceId == device.DeviceId)
         {
-            row.Status.Text = ok ? "Sent ✓" : message ?? "Couldn't send";
-            row.Status.Foreground = ok ? Ui.Good : Ui.B("#FF8A80");
+            _cardStatus.Text = ok ? "Sent ✓" : message ?? "Couldn't send";
+            _cardStatus.Foreground = ok ? Ui.Good : Ui.B("#FF8A80");
         }
         _safety.Stop();
         var done = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(ok ? 1100 : 2600) };
@@ -311,172 +416,59 @@ internal sealed class RailWindow : Window
         done.Start();
     }
 
-    // ---------------------------------------------------------------- rows
+    // ---------------------------------------------------------------- devices
 
     private void BuildRows()
     {
-        _rows.Children.Clear();
+        _pillItems.Children.Clear();
         _rowList.Clear();
         _hot = null;
         var devices = _devices();
         if (devices.Count == 0)
         {
-            _rows.Children.Add(new TextBlock
-            {
-                Text = "No phone paired yet.\nRight-click the tray icon → Pair a phone…",
-                Foreground = Ui.Muted, FontSize = 12.5, Margin = new Thickness(6, 4, 6, 8), TextWrapping = TextWrapping.Wrap,
-            });
+            _cardName.Text = "No phone paired";
+            _cardStatus.Text = "Tray icon → Pair a phone…";
+            _cardStatus.Foreground = Ui.Muted;
+            _pill.Visibility = Visibility.Collapsed;
             return;
         }
-        bool horizontal = _edge == Edge.Bottom;
-        foreach (var d in devices.OrderByDescending(x => x.LastSeenUtc))
+        // Online phones first, then most recently seen.
+        foreach (var d in devices.OrderByDescending(x => x.Online).ThenByDescending(x => x.LastSeenUtc))
         {
-            var row = BuildRow(d);
-            row.Root.Margin = horizontal ? new Thickness(0, 0, 8, 0) : new Thickness(0, 0, 0, 8);
-            if (horizontal)
+            var dot = Ui.Dot(d.Online ? Ui.Good : Ui.B("#5B6270"), 7);
+            dot.Margin = new Thickness(0, 0, 7, 0);
+            var row = new StackPanel { Orientation = Orientation.Horizontal };
+            row.Children.Add(dot);
+            row.Children.Add(new TextBlock { Text = d.Name, FontSize = 12, Foreground = d.Online ? Ui.B("#C9CED8") : Ui.Faint, MaxWidth = 150, TextTrimming = TextTrimming.CharacterEllipsis });
+            var item = new Border
             {
-                row.Root.Width = 220;
-                row.Root.VerticalAlignment = VerticalAlignment.Bottom;
-            }
-            _rows.Children.Add(row.Root);
-            _rowList.Add(row);
+                Child = row, Padding = new Thickness(10, 6, 12, 6), Margin = new Thickness(2),
+                CornerRadius = new CornerRadius(16), Background = Brushes.Transparent,
+            };
+            _pillItems.Children.Add(item);
+            _rowList.Add(new Row { Device = d, Item = item });
         }
+        // A pill with a single entry would just repeat the card.
+        _pill.Visibility = _rowList.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private Row BuildRow(TrustedDevice d)
-    {
-        // A slowly turning spectral ring behind the card shows through a 2 px gap as a living rim.
-        var spin = new RotateTransform();
-        var rim = new Image
-        {
-            Source = EffectTextures.Disc(_palette()),
-            Width = 560, Height = 560,
-            Stretch = Stretch.Fill,
-            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            RenderTransformOrigin = new Point(0.5, 0.5),
-            RenderTransform = spin,
-            Opacity = 0,
-            IsHitTestVisible = false,
-            Margin = new Thickness(-300),
-        };
-
-        // ---- compact: glyph + name + status
-        var glyph = new Border
-        {
-            Width = 20, Height = 36, CornerRadius = new CornerRadius(5),
-            BorderBrush = Ui.B("#CFE8FF"), BorderThickness = new Thickness(2), Margin = new Thickness(0, 0, 12, 0),
-        };
-        var info = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        info.Children.Add(new TextBlock { Text = d.Name, FontSize = 13.5, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
-        var statusRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
-        statusRow.Children.Add(Ui.Dot(d.Online ? Ui.Good : Ui.B("#5B6270"), 6));
-        statusRow.Children.Add(new TextBlock { Text = d.Online ? "  Online" : "  Last seen " + Ui.Ago(d.LastSeenUtc), FontSize = 11.5, Foreground = Ui.Muted });
-        info.Children.Add(statusRow);
-        var compact = new DockPanel { Margin = new Thickness(12, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center, Height = CompactHeight - 4 };
-        DockPanel.SetDock(glyph, Dock.Left);
-        compact.Children.Add(glyph);
-        compact.Children.Add(info);
-
-        // ---- dock: the phone drawing with a screen that lights up, name, status
-        var lit = new Border
-        {
-            Opacity = 0,
-            Background = new RadialGradientBrush
-            {
-                GradientOrigin = new Point(0.35, 0.45), Center = new Point(0.35, 0.45), RadiusX = 0.9, RadiusY = 0.7,
-                GradientStops =
-                {
-                    new GradientStop(Color.FromArgb(220, 255, 255, 255), 0),
-                    new GradientStop(Color.FromArgb(160, 61, 199, 255), 0.4),
-                    new GradientStop(Color.FromArgb(90, 214, 92, 255), 0.75),
-                    new GradientStop(Color.FromArgb(0, 214, 92, 255), 1),
-                },
-            },
-        };
-        var photo = new Image { Stretch = Stretch.UniformToFill, Opacity = 0 };
-        var screenGrid = new Grid();
-        screenGrid.Children.Add(lit);
-        screenGrid.Children.Add(photo);
-        var screen = new Border { CornerRadius = new CornerRadius(13), Background = Ui.B("#0B0D12"), ClipToBounds = true, Child = screenGrid };
-        var phone = new Border
-        {
-            Width = 86, Height = 168, CornerRadius = new CornerRadius(18), Padding = new Thickness(4),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(160, 255, 255, 255)), BorderThickness = new Thickness(2),
-            Child = screen,
-        };
-        var status = new TextBlock { Text = "Drop to send", FontSize = 12, Foreground = Ui.Muted, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 3, 0, 0) };
-        var dockStack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 18, 0, 0) };
-        dockStack.Children.Add(phone);
-        dockStack.Children.Add(new TextBlock { Text = d.Name, FontSize = 14, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 14, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis });
-        dockStack.Children.Add(status);
-        var dockScale = new ScaleTransform(0.85, 0.85);
-        dockStack.RenderTransformOrigin = new Point(0.5, 0.3);
-        dockStack.RenderTransform = dockScale;
-        dockStack.Opacity = 0;
-        dockStack.VerticalAlignment = VerticalAlignment.Top;
-
-        var content = new Grid();
-        content.Children.Add(compact);
-        content.Children.Add(dockStack);
-        var inner = new Border
-        {
-            Margin = new Thickness(2),
-            CornerRadius = new CornerRadius(13),
-            Background = Ui.B("#F51A1D24"),
-            Child = content,
-            ClipToBounds = true,
-        };
-
-        var rootGrid = new Grid { ClipToBounds = true };
-        rootGrid.Children.Add(rim);
-        rootGrid.Children.Add(inner);
-        var root = new Border
-        {
-            Height = CompactHeight,
-            CornerRadius = new CornerRadius(15),
-            Background = new SolidColorBrush(Color.FromArgb(18, 255, 255, 255)),
-            ClipToBounds = true,
-            Child = rootGrid,
-        };
-
-        return new Row
-        {
-            Device = d, Root = root, Compact = compact, Dock = dockStack, DockScale = dockScale,
-            Lit = lit, Photo = photo, Status = status, Rim = rim, RimSpin = spin,
-        };
-    }
-
-    /// <summary>The hovered device grows into the dock card; the previous one shrinks back.</summary>
+    /// <summary>Points the card at the hovered device and highlights it in the pill.</summary>
     private void SetHot(Row row)
     {
         if (ReferenceEquals(_hot, row)) return;
-        if (_hot is { } old) Collapse(old);
         _hot = row;
+        foreach (var r in _rowList)
+        {
+            bool on = ReferenceEquals(r, row);
+            r.Item.Background = on ? new SolidColorBrush(Color.FromArgb(46, AccentColor.R, AccentColor.G, AccentColor.B)) : Brushes.Transparent;
+            r.Item.BorderBrush = on ? new SolidColorBrush(Color.FromArgb(120, AccentColor.R, AccentColor.G, AccentColor.B)) : null;
+            r.Item.BorderThickness = new Thickness(on ? 1 : 0);
+        }
+        _cardName.Text = row.Device.Name;
+        _cardStatus.Text = row.Device.Online ? _dropText : $"{_dropText} · may be asleep";
+        _cardStatus.Foreground = Ui.Muted;
 
-        var d = TimeSpan.FromMilliseconds(320);
-        var ease = new BackEase { Amplitude = 0.2, EasingMode = EasingMode.EaseOut };
-        row.Root.BeginAnimation(HeightProperty, new DoubleAnimation(row.Root.ActualHeight > 0 ? row.Root.ActualHeight : CompactHeight, DockHeight, d) { EasingFunction = ease });
-        row.Compact.BeginAnimation(OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(120)));
-        row.Dock.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(220)) { BeginTime = TimeSpan.FromMilliseconds(80) });
-        var grow = new DoubleAnimation(0.85, 1, d) { EasingFunction = ease };
-        row.DockScale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
-        row.DockScale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
-        row.Lit.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(260)));
-        row.Rim.BeginAnimation(OpacityProperty, new DoubleAnimation(0.95, TimeSpan.FromMilliseconds(200)));
-        row.RimSpin.BeginAnimation(RotateTransform.AngleProperty,
-            new DoubleAnimation(0, 360, TimeSpan.FromSeconds(4)) { RepeatBehavior = RepeatBehavior.Forever });
-        row.Root.Background = new SolidColorBrush(Color.FromArgb(0, 255, 255, 255));
-    }
-
-    private static void Collapse(Row row)
-    {
-        var d = TimeSpan.FromMilliseconds(220);
-        row.Root.BeginAnimation(HeightProperty, new DoubleAnimation(CompactHeight, d) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
-        row.Compact.BeginAnimation(OpacityProperty, new DoubleAnimation(1, d));
-        row.Dock.BeginAnimation(OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(120)));
-        row.Lit.BeginAnimation(OpacityProperty, new DoubleAnimation(0, d));
-        row.Rim.BeginAnimation(OpacityProperty, new DoubleAnimation(0, d));
-        row.RimSpin.BeginAnimation(RotateTransform.AngleProperty, null);
-        row.Root.Background = new SolidColorBrush(Color.FromArgb(18, 255, 255, 255));
+        // A quick fade of the name so switching devices reads as a change, not a flicker.
+        _cardName.BeginAnimation(OpacityProperty, new DoubleAnimation(0.3, 1, TimeSpan.FromMilliseconds(180)));
     }
 }

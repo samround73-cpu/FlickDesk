@@ -10,7 +10,7 @@ Every push to `main` also builds both (see the run's *Artifacts* on the [Actions
 
 **Making a release:** bump `<Version>` in `windows/FlickDesk/FlickDesk.csproj` (and `versionName`/`versionCode` in `android/app/build.gradle.kts`) and push to `main` – CI builds both apps, tags the commit and publishes the release with the files attached.
 
-Current version: 0.3.3
+Current version: 0.3.4
 
 Hold your phone next to your screen, long-press a photo, **flick it towards the PC**. A ripple of
 spectral light washes in from that edge of the monitor and the file lands on your desktop.
