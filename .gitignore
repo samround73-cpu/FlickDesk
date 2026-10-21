@@ -1,0 +1,25 @@
+# ---- Android / Gradle
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/captures/
+android/.kotlin/
+*.iml
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# ---- Windows / .NET
+windows/**/bin/
+windows/**/obj/
+windows/.vs/
+*.user
+*.suo
+
+# ---- OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
